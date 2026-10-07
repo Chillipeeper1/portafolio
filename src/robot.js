@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createPixelScreen, MENU_ITEMS } from './pixelScreen.js';
 import { FACTS } from './facts.js';
+import { createScenery } from './scenery.js';
 import { PROJECTS } from './projects.js';
 import { CONTACT } from './contact.js';
 import { getLang, onLang } from './i18n.js';
@@ -17,13 +18,13 @@ export function createRobot(container) {
   container.appendChild(renderer.domElement);
 
   // Luces
-  scene.add(new THREE.HemisphereLight(0xbcd0ff, 0x1a1c24, 0.9));
-  const key = new THREE.DirectionalLight(0xffffff, 2.2);
+  scene.add(new THREE.HemisphereLight(0xcfe8ff, 0x6a9a58, 1.1));
+  const key = new THREE.DirectionalLight(0xfff2d6, 2.4);
   key.position.set(4, 6, 5);
   key.castShadow = true;
   key.shadow.mapSize.set(1024, 1024);
   scene.add(key);
-  const rim = new THREE.DirectionalLight(0x4fc3ff, 2);
+  const rim = new THREE.DirectionalLight(0xbfe0ff, 0.8);
   rim.position.set(-5, 3, -4);
   scene.add(rim);
 
@@ -131,14 +132,8 @@ export function createRobot(container) {
     return tex;
   };
   const flat = (mesh, y) => { mesh.rotation.x = -Math.PI / 2; mesh.position.y = y; scene.add(mesh); return mesh; };
-  // plataforma tenue que difumina hacia el fondo
-  flat(new THREE.Mesh(
-    new THREE.PlaneGeometry(14, 14),
-    new THREE.MeshBasicMaterial({
-      map: radial([[0, 'rgba(60,80,110,0.55)'], [0.5, 'rgba(35,48,70,0.3)'], [1, 'rgba(11,13,18,0)']]),
-      transparent: true, depthWrite: false,
-    }),
-  ), FLOOR_Y - 0.01);
+  // escenario: cielo, nubes, pasto y árboles
+  const scenery = createScenery(scene, FLOOR_Y);
   // sombra de contacto suave bajo los pies
   const contact = flat(new THREE.Mesh(
     new THREE.PlaneGeometry(3.4, 2.4),
@@ -262,7 +257,7 @@ export function createRobot(container) {
   resize();
 
   const clock = new THREE.Clock();
-  let blink = 0;
+  let blink = 0, lastT = 0;
   let yaw = 0;
 
   // Mareo: el mouse se agita -> se tambalea, se cae de lado y se levanta
@@ -340,6 +335,8 @@ export function createRobot(container) {
   const smooth = (x) => x * x * (3 - 2 * x);
   renderer.setAnimationLoop(() => {
     const t = clock.getElapsedTime();
+    const dtFrame = Math.min(0.1, t - lastT);
+    lastT = t;
     const still = zoomed || dizzy;
     const mx = still ? 0 : mouseTarget.x, my = still ? 0 : mouseTarget.y;
     head.rotation.y += (mx * 0.6 - head.rotation.y) * 0.08;
@@ -456,6 +453,7 @@ export function createRobot(container) {
     blink = (t % 4) < 0.12 ? 0.1 : 1;
     pixelScreen.draw(t, blink);
     updateBubble(t);
+    scenery.update(t, dtFrame);
     renderer.render(scene, camera);
   });
 }

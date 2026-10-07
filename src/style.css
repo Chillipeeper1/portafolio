@@ -1,5 +1,5 @@
 * { margin: 0; box-sizing: border-box; }
-html, body { height: 100%; background: #0b0d12; color: #e8ecf3; font-family: system-ui, sans-serif; }
+html, body { height: 100%; background: #7cc4f5; color: #e8ecf3; font-family: system-ui, sans-serif; }
 main { position: fixed; inset: 0; }
 #robot { position: absolute; inset: 0; }
 #robot canvas { display: block; }
@@ -8,17 +8,18 @@ main { position: fixed; inset: 0; }
   position: fixed; top: 24px; left: 28px; z-index: 1;
   font-family: 'Press Start 2P', ui-monospace, monospace;
   font-size: 12px; line-height: 1.6; letter-spacing: 0.04em;
-  color: #8ff7ff; text-shadow: 0 0 8px rgba(79, 195, 255, 0.45);
+  color: #8ff7ff; background: #0b3a45; border: 3px solid #8ff7ff; box-shadow: 4px 4px 0 #000; padding: 10px 14px;
 }
 .brand span { color: #ff6b3d; }
-@media (max-width: 520px) { .brand { font-size: 8px; top: 16px; left: 12px; max-width: calc(100% - 150px); } }
+@media (max-width: 520px) { .brand { font-size: 8px; top: 12px; left: 10px; padding: 6px 8px; max-width: calc(100% - 150px); } }
 
 .hint {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 1;
   font-family: 'Press Start 2P', ui-monospace, monospace; font-size: 10px; letter-spacing: 0.04em;
-  color: #8ff7ff; opacity: 0; pointer-events: none; transition: opacity 0.4s; text-align: center;
+  color: #8ff7ff; background: #0b3a45; border: 3px solid #8ff7ff; box-shadow: 4px 4px 0 #000; padding: 10px 14px;
+  opacity: 0; pointer-events: none; transition: opacity 0.4s; text-align: center;
 }
-body.zoomed .hint { opacity: 0.8; }
+body.zoomed .hint { opacity: 1; }
 @media (max-width: 520px) { .hint { font-size: 7px; bottom: 14px; } }
 
 /* Globo "¿Sabías que...?" */
@@ -44,6 +45,7 @@ body.zoomed .hint { opacity: 0.8; }
 .lang {
   position: fixed; top: 20px; right: 24px; z-index: 3; display: flex; gap: 10px; align-items: center;
   font-family: 'Press Start 2P', ui-monospace, monospace; font-size: 12px; color: #8ff7ff;
+  background: #0b3a45; border: 3px solid #8ff7ff; box-shadow: 4px 4px 0 #000; padding: 4px 8px;
 }
 .lang span { opacity: 0.4; }
 .lang button {
@@ -53,4 +55,4 @@ body.zoomed .hint { opacity: 0.8; }
 .lang button:hover { border-color: #8ff7ff; }
 .lang button.active { background: #8ff7ff; color: #0b3a45; }
 .lang button:focus-visible { outline: 2px dashed #ff6b3d; outline-offset: 2px; }
-@media (max-width: 520px) { .lang { top: 10px; right: 12px; font-size: 9px; } }
+@media (max-width: 520px) { .lang { top: 10px; right: 10px; font-size: 9px; padding: 2px 4px; } }
