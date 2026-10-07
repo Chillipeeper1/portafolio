@@ -5,17 +5,18 @@ import * as THREE from 'three';
 
 const matCache = new Map();
 const mat = (color) => {
-  if (!matCache.has(color)) matCache.set(color, new THREE.MeshLambertMaterial({ color, flatShading: true }));
+  if (!matCache.has(color)) matCache.set(color, new THREE.MeshLambertMaterial({ color }));
   return matCache.get(color);
 };
 const ell = (sx, sy, sz, color, [x, y, z] = [0, 0, 0], detail = 1) => {
+  detail = 2; // resolución suficiente para que se vea redondeado con sombreado suave
   const m = new THREE.Mesh(new THREE.IcosahedronGeometry(1, detail), mat(color));
   m.scale.set(sx, sy, sz);
   m.position.set(x, y, z);
   return m;
 };
-const cyl = (r1, r2, len, color, seg = 6) => new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, len, seg), mat(color));
-const cone = (r, h, color, seg = 6) => new THREE.Mesh(new THREE.ConeGeometry(r, h, seg), mat(color));
+const cyl = (r1, r2, len, color, seg = 12) => new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, len, seg), mat(color));
+const cone = (r, h, color, seg = 12) => new THREE.Mesh(new THREE.ConeGeometry(r, h, seg), mat(color));
 const group = (x, y, z, ...children) => {
   const g = new THREE.Group();
   g.position.set(x, y, z);
@@ -56,11 +57,11 @@ function deer() {
     head.add(ear);
     const ant = group(-0.02, 0.16, s * 0.06);
     ant.rotation.set(s * 0.35, 0, 0.3);
-    const main = cyl(0.02, 0.03, 0.48, antler, 5);
+    const main = cyl(0.02, 0.03, 0.48, antler, 8);
     main.position.y = 0.24;
     ant.add(main);
     [[0.18, 0.7, 0.2], [0.34, 0.8, 0.16]].forEach(([h, a, len]) => {
-      const p = cyl(0.014, 0.02, len, antler, 5);
+      const p = cyl(0.014, 0.02, len, antler, 8);
       p.position.set(0.05, h + len * 0.3, 0);
       p.rotation.z = -a;
       ant.add(p);
@@ -112,7 +113,7 @@ function fox() {
   head.add(snout, ell(0.035, 0.032, 0.035, dark, [0.41, -0.055, 0], 0));
   [-1, 1].forEach((s) => {
     head.add(eye(0.14, 0.04, s * 0.12, s, 0.03));
-    const ear = group(-0.02, 0.14, s * 0.08, cone(0.07, 0.2, orange, 4), cone(0.033, 0.08, dark, 4));
+    const ear = group(-0.02, 0.14, s * 0.08, cone(0.07, 0.2, orange, 10), cone(0.033, 0.08, dark, 10));
     ear.children[0].position.y = 0.1;
     ear.children[1].position.y = 0.18;
     ear.rotation.x = s * 0.25;
@@ -190,7 +191,7 @@ function bird() {
   g.add(ell(0.26, 0.17, 0.17, c, [0, 0, 0]));
   g.add(ell(0.2, 0.12, 0.14, lightC, [0.03, -0.05, 0]));
   g.add(ell(0.13, 0.12, 0.12, c, [0.27, 0.08, 0]));
-  const beak = cone(0.045, 0.13, '#ff9f1c', 4);
+  const beak = cone(0.045, 0.13, '#ff9f1c', 10);
   beak.rotation.z = -Math.PI / 2;
   beak.position.set(0.43, 0.06, 0);
   g.add(beak);

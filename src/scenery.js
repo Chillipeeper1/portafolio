@@ -1,5 +1,79 @@
 import * as THREE from 'three';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createAnimals } from './animals.js';
+
+// Ruido suave barato (suma de senos) para deformar geometrías y que se vean orgánicas
+const noise3 = (x, y, z, k) =>
+  Math.sin(x * 2.1 + k) * Math.sin(y * 1.7 + k * 1.3) * Math.sin(z * 2.3 + k * 0.7)
+  + 0.5 * Math.sin(x * 4.3 + y * 3.1 + k * 2.1) * Math.sin(z * 3.7 - k);
+
+// Prepara una geometría para sombreado suave: une vértices duplicados y recalcula normales
+const smooth = (geo) => {
+  geo.deleteAttribute('normal');
+  geo.deleteAttribute('uv');
+  return mergeVertices(geo);
+};
+
+// Degradado vertical en colores de vértice: abajo más oscuro (sombra ambiental falsa), arriba más claro
+function shadeByHeight(geo, minY, maxY, dark = 0.6, bright = 1.12, wobble = 0) {
+  const p = geo.attributes.position, col = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) {
+    const t = Math.min(1, Math.max(0, (p.getY(i) - minY) / (maxY - minY)));
+    const k = dark + (bright - dark) * t + wobble * noise3(p.getX(i) * 3, p.getY(i) * 3, p.getZ(i) * 3, 1.7);
+    col.set([k, k, k], i * 3);
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return geo;
+}
+
+// Copa de árbol / arbusto: esfera deformada con ruido, base un poco aplanada
+function foliageGeometry(seed) {
+  const geo = smooth(new THREE.IcosahedronGeometry(1, 3));
+  const p = geo.attributes.position, v = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i);
+    const d = 1 + 0.11 * noise3(v.x, v.y, v.z, seed) + 0.05 * noise3(v.x * 2.5, v.y * 2.5, v.z * 2.5, seed + 5);
+    v.multiplyScalar(d);
+    if (v.y < 0) v.y *= 0.82;
+    p.setXYZ(i, v.x, v.y, v.z);
+  }
+  geo.computeVertexNormals();
+  return shadeByHeight(geo, -0.85, 1.05, 0.58, 1.15, 0.05);
+}
+
+// Piso de pino: cono con borde inferior ondulado y caído
+function pineTierGeometry(seed) {
+  const geo = smooth(new THREE.ConeGeometry(1, 1, 22, 4));
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const a = Math.atan2(z, x), lowness = Math.max(0, -y * 2); // 1 en la base, 0 a media altura
+    const wave = Math.sin(a * 9 + seed) * 0.5 + 0.5;
+    const r = 1 + 0.08 * wave * lowness;
+    p.setXYZ(i, x * r, y - 0.09 * wave * lowness * Math.min(1, Math.hypot(x, z) * 2), z * r);
+  }
+  geo.computeVertexNormals();
+  return shadeByHeight(geo, -0.6, 0.5, 0.55, 1.15, 0.04);
+}
+
+// Montaña con relieve y nieve pintada en la cima
+function mountainGeometry(seed) {
+  const geo = smooth(new THREE.ConeGeometry(1, 1, 40, 10));
+  const p = geo.attributes.position, col = new Float32Array(p.count * 3);
+  const rock = new THREE.Color(0x9db8cf), snow = new THREE.Color(0xf2f6fa), c = new THREE.Color();
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const a = Math.atan2(z, x), h = y + 0.5;
+    const r = 1 + 0.16 * Math.sin(a * 5 + seed) * (1 - h) + 0.07 * Math.sin(a * 13 + seed * 2);
+    p.setXYZ(i, x * r, y, z * r);
+    const snowLine = 0.68 + 0.08 * Math.sin(a * 7 + seed);
+    c.copy(h > snowLine ? snow : rock).multiplyScalar(0.85 + 0.2 * h);
+    col.set([c.r, c.g, c.b], i * 3);
+  }
+  geo.computeVertexNormals();
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return geo;
+}
 
 // Escenario: cielo, montañas, colinas, bosque, pasto con viento, flores, mariposas y polen.
 // Formas low-poly y texturas de píxeles para que combine con el estilo retro del robot.
@@ -45,20 +119,29 @@ const blobTexture = () => canvasTexture(64, 64, (g) => {
 });
 
 function grassTexture(rand) {
-  const tex = canvasTexture(32, 32, (g) => {
-    const greens = ['#58b050', '#4fa548', '#63bb58', '#47993f', '#6cc460'];
-    for (let y = 0; y < 32; y++) {
-      for (let x = 0; x < 32; x++) {
-        g.fillStyle = greens[Math.floor(rand() * greens.length)];
-        g.fillRect(x, y, 1, 1);
+  const N = 256;
+  const tex = canvasTexture(N, N, (g) => {
+    g.fillStyle = '#55ad4d';
+    g.fillRect(0, 0, N, N);
+    const greens = ['#4a9f43', '#62b957', '#3f9139', '#6fc362', '#5aa84e', '#78c96a'];
+    for (let i = 0; i < 900; i++) {
+      const x = rand() * N, y = rand() * N, r = 3 + rand() * 14;
+      g.globalAlpha = 0.18 + rand() * 0.22;
+      g.fillStyle = greens[Math.floor(rand() * greens.length)];
+      // se dibuja también desplazado para que la textura se repita sin costuras
+      for (const dx of [-N, 0, N]) {
+        for (const dy of [-N, 0, N]) {
+          g.beginPath();
+          g.arc(x + dx, y + dy, r, 0, Math.PI * 2);
+          g.fill();
+        }
       }
     }
+    g.globalAlpha = 1;
   });
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestMipmapLinearFilter;
-  tex.repeat.set(60, 60);
-  tex.anisotropy = 4;
+  tex.repeat.set(26, 26);
+  tex.anisotropy = 8;
   return tex;
 }
 
@@ -73,7 +156,9 @@ export function createScenery(scene, floorY) {
   scene.background = skyTexture();
   scene.fog = new THREE.Fog(0xcfeaff, 24, 70);
 
-  const lambert = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, flatShading: true, ...extra });
+  const lambert = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, ...extra });
+  const foliageGeos = [0, 1, 2].map((k) => foliageGeometry(k * 2.7 + 0.4));
+  const pineGeos = [0, 1].map((k) => pineTierGeometry(k * 1.9));
   const blobTex = blobTexture();
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
   const pos = new THREE.Vector3(), sc = new THREE.Vector3();
@@ -105,15 +190,11 @@ export function createScenery(scene, floorY) {
 
   // --- Montañas lejanas (sin niebla, ya con tono azulado) ---
   [[-48, -95, 30, 26], [-12, -110, 38, 34], [30, -100, 32, 28], [62, -92, 26, 22]].forEach(([x, z, r, h]) => {
-    const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.ConeGeometry(r, h, 7), lambert(0x9db8cf, { fog: false }));
-    body.position.y = h / 2;
-    const cap = new THREE.Mesh(new THREE.ConeGeometry(r * 0.3, h * 0.3, 7), lambert(0xf2f6fa, { fog: false }));
-    cap.position.y = h * 0.86;
-    g.add(body, cap);
-    g.position.set(x, floorY - 2, z);
-    g.rotation.y = rand() * 6;
-    scene.add(g);
+    const mtn = new THREE.Mesh(mountainGeometry(rand() * 10), lambert(0xffffff, { fog: false, vertexColors: true }));
+    mtn.scale.set(r, h, r);
+    mtn.position.set(x, floorY - 2 + h / 2, z);
+    mtn.rotation.y = rand() * 6;
+    scene.add(mtn);
   });
 
   // --- Sol ---
@@ -152,7 +233,7 @@ export function createScenery(scene, floorY) {
 
   // --- Colinas ---
   [[-26, -42, 22, 9], [10, -50, 30, 12], [38, -40, 20, 8], [-52, -55, 28, 11]].forEach(([x, z, w, h], i) => {
-    const hill = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 12), lambert(i % 2 ? 0x6bb56a : 0x58a65a));
+    const hill = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 20), lambert(i % 2 ? 0x6bb56a : 0x58a65a));
     hill.scale.set(w, h, w * 0.6);
     hill.position.set(x, floorY - h * 0.25, z);
     scene.add(hill);
@@ -160,7 +241,7 @@ export function createScenery(scene, floorY) {
 
   // --- Línea de bosque lejano ---
   const LINE = 170;
-  const treeLine = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 6).translate(0, 0.5, 0), lambert(0xffffff), LINE);
+  const treeLine = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 10).translate(0, 0.5, 0), lambert(0xffffff), LINE);
   const lineColors = ['#2f6b45', '#2a6340', '#38774c', '#2d7048'].map((c) => new THREE.Color(c));
   for (let i = 0; i < LINE; i++) {
     const r = between(0.9, 1.7), h = between(3.2, 7);
@@ -171,7 +252,7 @@ export function createScenery(scene, floorY) {
   scene.add(treeLine);
 
   // --- Briznas de pasto en matas, con punta más clara y viento ---
-  const bladeGeo = new THREE.ConeGeometry(0.05, 0.42, 3).translate(0, 0.21, 0);
+  const bladeGeo = new THREE.ConeGeometry(0.045, 0.42, 4, 2).translate(0, 0.21, 0);
   {
     const p = bladeGeo.attributes.position, col = new Float32Array(p.count * 3);
     for (let i = 0; i < p.count; i++) {
@@ -203,8 +284,8 @@ export function createScenery(scene, floorY) {
   const FLOWERS = 110;
   const windyLambert = (c) => windy(lambert(c));
   const stems = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.012, 0.012, 1, 4).translate(0, 0.5, 0), windyLambert(0x3f8f3a), FLOWERS);
-  const petals = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.085, 0), windyLambert(0xffffff), FLOWERS);
-  const centers = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.035, 0), windyLambert(0xffc93c), FLOWERS);
+  const petals = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.085, 1), windyLambert(0xffffff), FLOWERS);
+  const centers = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.035, 1), windyLambert(0xffc93c), FLOWERS);
   const flowerColors = ['#ffffff', '#ffd54a', '#ff7eb6', '#b388ff', '#ff8a65', '#7ec8ff'].map((c) => new THREE.Color(c));
   const flowerSpots = [];
   for (let i = 0; i < FLOWERS;) {
@@ -232,15 +313,26 @@ export function createScenery(scene, floorY) {
   const up = new THREE.Vector3(0, 1, 0);
   const world = (g, lx, ly, lz) => new THREE.Vector3(lx, ly, lz).applyAxisAngle(up, g.rotation.y).add(g.position);
   const trunkSpots = [];
+  // Punto exacto sobre la superficie de una copa deformada: se lanza un rayo desde afuera hacia su centro
+  const ray = new THREE.Raycaster();
+  const surfacePoint = (mesh, dir) => {
+    const c = mesh.getWorldPosition(new THREE.Vector3());
+    const reach = mesh.scale.x * 3;
+    ray.set(c.clone().addScaledVector(dir, reach), dir.clone().negate());
+    ray.far = reach;
+    const hit = ray.intersectObject(mesh, false)[0];
+    return hit ? hit.point : c.addScaledVector(dir, mesh.scale.x);
+  };
 
   function pine(x, z, s) {
     const g = new THREE.Group();
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.13 * s, 0.2 * s, 0.9 * s, 6), trunkMat);
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.13 * s, 0.2 * s, 0.9 * s, 12), trunkMat);
     trunk.position.y = 0.45 * s;
     g.add(trunk);
     const tiers = [[1.0, 1.1, 1.0, '#25683b'], [0.78, 1.0, 1.7, '#2c7744'], [0.55, 0.9, 2.3, '#378a52']];
     tiers.forEach(([r, h, y, c]) => {
-      const cone = new THREE.Mesh(new THREE.ConeGeometry(r * s, h * s, 7), lambert(jitter(c)));
+      const cone = new THREE.Mesh(pickFrom(pineGeos), lambert(jitter(c), { vertexColors: true }));
+      cone.scale.set(r * s, h * s, r * s);
       cone.position.y = y * s;
       cone.rotation.y = rand() * 6;
       g.add(cone);
@@ -259,30 +351,34 @@ export function createScenery(scene, floorY) {
 
   function round(x, z, s) {
     const g = new THREE.Group();
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.15 * s, 0.24 * s, 1.3 * s, 6), trunkMat);
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.15 * s, 0.24 * s, 1.3 * s, 12), trunkMat);
     trunk.position.y = 0.65 * s;
     g.add(trunk);
     // ramas cortas
     [-1, 1].forEach((side) => {
-      const br = new THREE.Mesh(new THREE.CylinderGeometry(0.05 * s, 0.08 * s, 0.6 * s, 5), trunkMat);
+      const br = new THREE.Mesh(new THREE.CylinderGeometry(0.05 * s, 0.08 * s, 0.6 * s, 8), trunkMat);
       br.position.set(side * 0.22 * s, 1.25 * s, 0);
       br.rotation.z = -side * 0.7;
       g.add(br);
     });
     const crowns = [[0, 1.9, 0, 1.0, '#4fae4a'], [0.55, 1.6, 0.2, 0.7, '#449e43'], [-0.5, 1.65, -0.1, 0.72, '#3f963f'], [0.1, 2.45, 0.1, 0.55, '#66c25a']];
+    const crownMeshes = [];
     crowns.forEach(([dx, y, dz, r, c]) => {
-      const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(r * s, 1), lambert(jitter(c)));
+      const crown = new THREE.Mesh(pickFrom(foliageGeos), lambert(jitter(c), { vertexColors: true }));
+      crown.scale.setScalar(r * s);
       crown.position.set(dx * s, y * s, dz * s);
-      crown.rotation.set(rand() * 3, rand() * 3, 0);
+      crown.rotation.y = rand() * 6;
       g.add(crown);
+      crownMeshes.push(crown);
     });
     g.position.set(x, floorY, z);
     scene.add(g);
-    // manzanas / naranjas sobre la superficie de las copas
+    g.updateMatrixWorld(true);
+    // manzanas / naranjas sobre la superficie de las copas (medio asomadas)
     for (let i = 0; i < 26; i++) {
-      const [cx, cy, cz, cr] = crowns[i % 3];
       const d = new THREE.Vector3(rand() * 2 - 1, rand() * 1.2 - 0.3, rand() * 1.4 - 0.2).normalize();
-      apples.push({ pos: world(g, (cx + d.x * cr * 0.97) * s, (cy + d.y * cr * 0.97) * s, (cz + d.z * cr * 0.97) * s), r: 0.075 * s, color: pickFrom(appleColors) });
+      const r = 0.075 * s;
+      apples.push({ pos: surfacePoint(crownMeshes[i % 3], d).addScaledVector(d, r * 0.35), r, color: pickFrom(appleColors) });
     }
     addBlob(x - 0.3 * s, z - 0.25 * s, 1.3 * s, 1.0 * s);
     trunkSpots.push([x, z, s]);
@@ -299,38 +395,39 @@ export function createScenery(scene, floorY) {
     .forEach(([x, z, s]) => {
       const g = new THREE.Group();
       const puffs = [[0, 0, 0, 1], [0.7, -0.1, 0.1, 0.75], [-0.65, -0.05, -0.1, 0.8], [0.15, 0.3, -0.15, 0.6]];
+      const puffMeshes = [];
       puffs.forEach(([dx, dy, dz, r]) => {
-        const b = new THREE.Mesh(new THREE.IcosahedronGeometry(0.55 * r * s, 1), lambert(jitter(pickFrom(bushColors))));
+        const b = new THREE.Mesh(pickFrom(foliageGeos), lambert(jitter(pickFrom(bushColors)), { vertexColors: true }));
         b.position.set(dx * s * 0.8, 0.35 * s + dy, dz * s);
-        b.scale.y = 0.8;
+        b.scale.set(0.55 * r * s, 0.44 * r * s, 0.55 * r * s);
+        b.rotation.y = rand() * 6;
         g.add(b);
+        puffMeshes.push(b);
       });
       g.position.set(x, floorY, z);
       scene.add(g);
+      g.updateMatrixWorld(true);
       for (let i = 0; i < 7; i++) {
-        const [dx, dy, dz, r] = puffs[i % 3];
         const d = new THREE.Vector3(rand() * 2 - 1, rand() * 0.8, rand() * 0.8 + 0.2).normalize();
-        apples.push({
-          pos: new THREE.Vector3(x + dx * s * 0.8 + d.x * 0.55 * r * s, floorY + 0.35 * s + dy + d.y * 0.44 * r * s, z + dz * s + d.z * 0.55 * r * s),
-          r: 0.045 * s, color: new THREE.Color(rand() < 0.5 ? '#d7263d' : '#7b2cbf'),
-        });
+        const r = 0.045 * s;
+        apples.push({ pos: surfacePoint(puffMeshes[i % 3], d).addScaledVector(d, r * 0.3), r, color: new THREE.Color(rand() < 0.5 ? '#d7263d' : '#7b2cbf') });
       }
       addBlob(x - 0.1, z - 0.1, 1.2 * s, 0.8 * s);
     });
 
   // Frutas y bayas (un solo InstancedMesh), piñas
-  const fruitMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), lambert(0xffffff), apples.length);
+  const fruitMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 2), lambert(0xffffff), apples.length);
   apples.forEach((a, i) => {
     fruitMesh.setMatrixAt(i, m.compose(a.pos, q.identity(), sc.set(a.r, a.r, a.r)));
     fruitMesh.setColorAt(i, a.color);
   });
-  const coneMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 8, 6), lambert(0x8a5a2b), cones.length);
+  const coneMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 10, 8), lambert(0x8a5a2b), cones.length);
   cones.forEach((c, i) => coneMesh.setMatrixAt(i, m.compose(c.pos, q.identity(), sc.set(c.r * 0.7, c.r * 1.3, c.r * 0.7))));
   scene.add(fruitMesh, coneMesh);
 
   // --- Rocas ---
   const ROCKS = 14;
-  const rocks = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), lambert(0xffffff), ROCKS);
+  const rocks = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), lambert(0xffffff, { flatShading: true }), ROCKS);
   const rockColors = ['#8e9196', '#7d8187', '#9a9c9f'].map((c) => new THREE.Color(c));
   for (let i = 0; i < ROCKS;) {
     const x = between(-15, 15), z = between(-12, 4);
@@ -353,8 +450,8 @@ export function createScenery(scene, floorY) {
       shrooms.push([x + Math.cos(a) * d, z + Math.abs(Math.sin(a)) * d, between(1.4, 2.3)]);
     }
   });
-  const stemsS = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.05, 0.06, 0.18, 6).translate(0, 0.09, 0), lambert(0xf3eadc), shrooms.length);
-  const caps = new THREE.InstancedMesh(new THREE.SphereGeometry(0.14, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), lambert(0xd93a32), shrooms.length);
+  const stemsS = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.05, 0.06, 0.18, 10).translate(0, 0.09, 0), lambert(0xf3eadc), shrooms.length);
+  const caps = new THREE.InstancedMesh(new THREE.SphereGeometry(0.14, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), lambert(0xd93a32), shrooms.length);
   const dots = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.022, 0), lambert(0xffffff), shrooms.length * 4);
   shrooms.forEach(([x, z, s], i) => {
     stemsS.setMatrixAt(i, m.compose(pos.set(x, floorY, z), q.identity(), sc.set(s, s, s)));
