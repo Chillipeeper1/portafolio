@@ -1,0 +1,41 @@
+* { margin: 0; box-sizing: border-box; }
+html, body { height: 100%; background: #0b0d12; color: #e8ecf3; font-family: system-ui, sans-serif; }
+main { position: fixed; inset: 0; }
+#robot { position: absolute; inset: 0; }
+#robot canvas { display: block; }
+
+.brand {
+  position: fixed; top: 24px; left: 28px; z-index: 1;
+  font-family: 'Press Start 2P', ui-monospace, monospace;
+  font-size: 12px; line-height: 1.6; letter-spacing: 0.04em;
+  color: #8ff7ff; text-shadow: 0 0 8px rgba(79, 195, 255, 0.45);
+}
+.brand span { color: #ff6b3d; }
+@media (max-width: 520px) { .brand { font-size: 9px; top: 16px; left: 16px; } }
+
+.hint {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 1;
+  font-family: 'Press Start 2P', ui-monospace, monospace; font-size: 10px; letter-spacing: 0.04em;
+  color: #8ff7ff; opacity: 0; pointer-events: none; transition: opacity 0.4s; text-align: center;
+}
+body.zoomed .hint { opacity: 0.8; }
+@media (max-width: 520px) { .hint { font-size: 7px; bottom: 14px; } }
+
+/* Globo "¿Sabías que...?" */
+.bubble {
+  position: fixed; left: 0; top: 0; z-index: 2; width: 270px; padding: 14px 16px;
+  font-family: 'Press Start 2P', ui-monospace, monospace; font-size: 9px; line-height: 1.8;
+  color: #8ff7ff; background: #0b3a45; border: 4px solid #8ff7ff; box-shadow: 6px 6px 0 #000;
+  opacity: 0; pointer-events: none; transition: opacity 0.25s;
+  background-image: repeating-linear-gradient(to bottom, rgba(0,0,0,0.16) 0 1px, transparent 1px 3px);
+}
+.bubble.show { opacity: 1; }
+.bubble-title { color: #ff6b3d; margin-bottom: 8px; }
+.bubble-text .ghost { visibility: hidden; }
+.bubble::before { /* cola apuntando al robot */
+  content: ''; position: absolute; top: calc(50% - 8px); left: -16px; width: 12px; height: 16px;
+  background: #8ff7ff; clip-path: polygon(100% 0, 100% 100%, 0 50%);
+}
+.bubble.flip::before { left: auto; right: -16px; clip-path: polygon(0 0, 0 100%, 100% 50%); }
+@media (max-width: 520px) { .bubble { width: 200px; font-size: 7px; padding: 10px 12px; } }
+.bubble.dock::before { display: none; }
