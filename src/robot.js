@@ -156,6 +156,28 @@ export function createRobot(container) {
 
   // Interacción: la cabeza sigue el mouse
   const mouseTarget = { x: 0, y: 0 };
+  // Detecta que el mouse se agite de lado a lado: varios barridos amplios con cambio de dirección
+  let lastPX = null, runDX = 0, runDir = 0;
+  const reversals = [];
+  let dizzyReq = false;
+  addEventListener('pointermove', (e) => {
+    if (lastPX !== null) {
+      const dx = (e.clientX - lastPX) / innerWidth;
+      const dir = Math.sign(dx);
+      if (dir && dir !== runDir) {
+        if (runDir && Math.abs(runDX) > 0.12) {
+          const now = performance.now();
+          reversals.push(now);
+          while (reversals.length && now - reversals[0] > 2000) reversals.shift();
+          if (reversals.length >= 5) { dizzyReq = true; reversals.length = 0; }
+        }
+        runDir = dir;
+        runDX = 0;
+      }
+      runDX += dx;
+    }
+    lastPX = e.clientX;
+  });
   addEventListener('pointermove', (e) => {
     mouseTarget.x = (e.clientX / innerWidth) * 2 - 1;
     mouseTarget.y = (e.clientY / innerHeight) * 2 - 1;
@@ -243,6 +265,22 @@ export function createRobot(container) {
   let blink = 0;
   let yaw = 0;
 
+  // Mareo: el mouse se agita -> se tambalea, se cae de lado y se levanta
+  let dizzy = null, dizzyCooldown = 0;
+  const stars = new THREE.Group();
+  stars.position.set(0, 1.45, 0);
+  stars.visible = false;
+  for (let i = 0; i < 3; i++) {
+    const star = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.13),
+      new THREE.MeshStandardMaterial({ color: 0xffac33, emissive: 0xffac33, emissiveIntensity: 0.8 }),
+    );
+    const a = (i / 3) * Math.PI * 2;
+    star.position.set(Math.cos(a) * 0.95, 0, Math.sin(a) * 0.95);
+    stars.add(star);
+  }
+  head.add(stars);
+
   // Globo "¿Sabías que...?" cada 30 s, junto a la cabeza
   const bubble = document.getElementById('bubble');
   const bubbleText = bubble.querySelector('.bubble-text');
@@ -302,7 +340,8 @@ export function createRobot(container) {
   const smooth = (x) => x * x * (3 - 2 * x);
   renderer.setAnimationLoop(() => {
     const t = clock.getElapsedTime();
-    const mx = zoomed ? 0 : mouseTarget.x, my = zoomed ? 0 : mouseTarget.y;
+    const still = zoomed || dizzy;
+    const mx = still ? 0 : mouseTarget.x, my = still ? 0 : mouseTarget.y;
     head.rotation.y += (mx * 0.6 - head.rotation.y) * 0.08;
     head.rotation.x += (my * 0.3 - head.rotation.x) * 0.08;
     yaw += (mx * 0.25 - yaw) * 0.04;
@@ -318,7 +357,7 @@ export function createRobot(container) {
     let offX = 0, offY = 0, extraYaw = 0, tiltZ = 0, headZ = 0;
 
     // Planificador de acciones
-    if (!action && !zoomed && t > nextAction) {
+    if (!action && !zoomed && !dizzy && t > nextAction) {
       const type = lastType === 'walk' ? 'dance' : lastType === 'dance' ? 'walk' : (Math.random() < 0.5 ? 'walk' : 'dance');
       action = { type, t0: t, dur: ACTIONS[type], ending: false };
       lastType = type;
@@ -371,6 +410,47 @@ export function createRobot(container) {
     armR.rotation.x = armRx * env;
     legL.rotation.x = legLx * env;
     legR.rotation.x = legRx * env;
+
+    // --- Mareo ---
+    if (dizzyReq && !dizzy && !zoomed && t > dizzyCooldown) {
+      dizzy = { t0: t, dir: Math.random() < 0.5 ? -1 : 1 };
+      action = null;
+      env = 0;
+      pixelScreen.setOverride('dizzy');
+    }
+    dizzyReq = false;
+    if (dizzy) {
+      const e = t - dizzy.t0, D = dizzy.dir;
+      if (zoomed || e > 6.8) {
+        dizzy = null;
+        dizzyCooldown = t + 15;
+        nextAction = Math.max(nextAction, t + 20);
+        pixelScreen.setOverride(null);
+        stars.visible = false;
+      } else {
+        let ang = 0, wob = 0;
+        if (e < 1.8) wob = Math.min(1, e / 0.5);
+        else if (e < 2.6) ang = ((e - 1.8) / 0.8) ** 2;
+        else if (e < 5.6) ang = 1 + 0.06 * Math.sin((e - 2.6) * 14) * Math.exp(-(e - 2.6) * 3);
+        else ang = 1 - smooth((e - 5.6) / 1.2);
+        const theta = -D * (Math.PI / 2) * ang;
+        const d = 0.2 - FLOOR_Y;              // distancia centro -> pies
+        const lift = Math.abs(Math.sin(theta));
+        robot.rotation.z = theta + Math.sin(e * 7) * 0.1 * wob;
+        robot.position.x = -d * Math.sin(theta) - d * D * lift + Math.sin(e * 3.5) * 0.25 * wob;
+        robot.position.y = 0.2 + d * (Math.cos(theta) - 1) + 0.95 * lift;
+        const hw = e < 2.6 ? 1 : e < 5.6 ? 0.25 : 0;
+        head.rotation.y = Math.sin(e * 10) * 0.6 * hw;
+        head.rotation.z = Math.sin(e * 7) * 0.2 * hw;
+        legL.rotation.x = Math.sin(e * 8) * 0.35 * wob;
+        legR.rotation.x = -legL.rotation.x;
+        armL.rotation.z = 0.05 + Math.sin(e * 8) * 0.5 * wob;
+        armR.rotation.z = -0.05 - Math.sin(e * 8 + 1) * 0.5 * wob;
+        stars.visible = e < 5.6;
+        stars.rotation.y = t * 6;
+        contact.position.x = robot.position.x;
+      }
+    }
     bulb.material.emissiveIntensity = 0.6 + Math.sin(t * 4) * 0.4;
     // parpadeo
     blink = (t % 4) < 0.12 ? 0.1 : 1;
