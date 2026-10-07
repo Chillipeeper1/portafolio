@@ -119,6 +119,12 @@ export function createScenery(scene, floorY) {
   const trunkMat = lambert(0x7a5230);
   const pineMat = lambert(0x2e7d46);
   const roundMat = lambert(0x4fae4a);
+  // Frutas: se acumulan y se dibujan al final con un solo InstancedMesh por tipo
+  const apples = [], cones = [];
+  const appleColors = ['#e63946', '#ff9f1c', '#ffd23f', '#e63946'].map((c) => new THREE.Color(c));
+  const up = new THREE.Vector3(0, 1, 0);
+  const world = (g, lx, ly, lz) => new THREE.Vector3(lx, ly, lz).applyAxisAngle(up, g.rotation.y).add(g.position);
+
   function pine(x, z, s) {
     const g = new THREE.Group();
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.13 * s, 0.18 * s, 0.9 * s, 6), trunkMat);
@@ -132,6 +138,13 @@ export function createScenery(scene, floorY) {
     g.position.set(x, floorY, z);
     g.rotation.y = rand() * 6;
     scene.add(g);
+    // piñas colgando del borde de cada piso
+    const tiers = [[1.0, 1.1, 1.0], [0.78, 1.0, 1.7], [0.55, 0.9, 2.3]];
+    for (let i = 0; i < 12; i++) {
+      const [r, h, y] = tiers[i % 3], a = rand() * Math.PI * 2;
+      const pos = world(g, Math.cos(a) * r * s * 0.82, (y - h / 2) * s + 0.06 * s, Math.sin(a) * r * s * 0.82);
+      cones.push({ pos, r: 0.1 * s });
+    }
   }
   function round(x, z, s) {
     const g = new THREE.Group();
@@ -145,11 +158,28 @@ export function createScenery(scene, floorY) {
     });
     g.position.set(x, floorY, z);
     scene.add(g);
+    // manzanas / naranjas sobre la superficie de las copas
+    const crowns = [[0, 1.9, 0, 1.0], [0.55, 1.6, 0.2, 0.7], [-0.5, 1.65, -0.1, 0.72]];
+    for (let i = 0; i < 26; i++) {
+      const [cx, cy, cz, cr] = crowns[i % 3];
+      const d = new THREE.Vector3(rand() * 2 - 1, rand() * 1.2 - 0.3, rand() * 1.4 - 0.2).normalize();
+      const pos = world(g, (cx + d.x * cr * 0.97) * s, (cy + d.y * cr * 0.97) * s, (cz + d.z * cr * 0.97) * s);
+      apples.push({ pos, r: 0.075 * s, color: appleColors[Math.floor(rand() * appleColors.length)] });
+    }
   }
   [[-8.5, -7, 1.1], [8.8, -8, 1.2], [-13, -11, 1.5], [14, -12, 1.6], [4.5, -18, 2.0], [-4, -20, 1.9], [-19, -6, 1.4], [20, -5, 1.4],
     [-5.5, -6, 1.0], [6, -6.5, 1.1], [-10.5, -4.5, 1.2], [11.5, -5, 1.1], [-16, -9, 1.5], [17, -9.5, 1.4],
     [-23, -12, 1.8], [24, -13, 1.8], [-28, -8, 1.6], [29, -9, 1.6], [-20, -17, 2.0], [21, -18, 2.0]]
     .forEach(([x, z, s], i) => (i % 2 ? round(x, z, s * TREE_SCALE) : pine(x, z, s * TREE_SCALE)));
+
+  const appleMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), lambert(0xffffff), apples.length);
+  apples.forEach((a, i) => {
+    appleMesh.setMatrixAt(i, m.compose(a.pos, q.identity(), sc.set(a.r, a.r, a.r)));
+    appleMesh.setColorAt(i, a.color);
+  });
+  const coneMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 8, 6), lambert(0x8a5a2b), cones.length);
+  cones.forEach((c, i) => coneMesh.setMatrixAt(i, m.compose(c.pos, q.identity(), sc.set(c.r * 0.7, c.r * 1.3, c.r * 0.7))));
+  scene.add(appleMesh, coneMesh);
 
   // --- Arbustos ---
   const bushMat = lambert(0x3d9a45);
