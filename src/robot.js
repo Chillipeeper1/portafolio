@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createPixelScreen, MENU_ITEMS } from './pixelScreen.js';
 import { FACTS } from './facts.js';
+import { PROJECTS } from './projects.js';
 
 export function createRobot(container) {
   const scene = new THREE.Scene();
@@ -203,9 +204,21 @@ export function createRobot(container) {
     const p = screenHit();
     const idx = p ? pixelScreen.hitTest(p.x, p.y) : -1;
     const { mode } = pixelScreen.state;
-    if (mode === 'menu' && idx >= 0) pixelScreen.setMode('page', MENU_ITEMS[idx].key);
-    else if (mode === 'page' && idx === 100) pixelScreen.setMode('menu');
-    else if (!p) setZoom(false); // clic fuera de la pantalla: salir
+    if (!p) { setZoom(false); return; } // clic fuera de la pantalla: salir
+    if (mode === 'menu' && idx >= 0) {
+      const { key } = MENU_ITEMS[idx];
+      if (key === 'proyectos') pixelScreen.setMode('projects');
+      else pixelScreen.setMode('page', key);
+    } else if (mode === 'page' && idx === 100) {
+      pixelScreen.setMode('menu');
+    } else if (mode === 'projects') {
+      if (idx === 100) pixelScreen.setMode('menu');
+      else if (idx >= 0) pixelScreen.setMode('project', null, PROJECTS[idx].key);
+    } else if (mode === 'project') {
+      if (idx === 100) pixelScreen.setMode('projects');
+      else if (idx === 101) window.open(pixelScreen.currentProject().url, '_blank', 'noopener');
+      else if (idx >= 200) pixelScreen.setTab(idx - 200);
+    }
   });
   addEventListener('keydown', (e) => { if (e.key === 'Escape' && zoomed) setZoom(false); });
 

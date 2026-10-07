@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { PROJECTS } from './projects.js';
 
 // Fuente bitmap 5x7
 const G = {
@@ -35,6 +36,20 @@ const G = {
   '>': '10000 01000 00100 00010 00100 01000 10000',
   '<': '00001 00010 00100 01000 00100 00010 00001',
   '_': '00000 00000 00000 00000 00000 00000 11111',
+  0: '01110 10001 10011 10101 11001 10001 01110',
+  1: '00100 01100 00100 00100 00100 00100 01110',
+  2: '01110 10001 00001 00010 00100 01000 11111',
+  3: '11110 00001 00001 01110 00001 00001 11110',
+  4: '00010 00110 01010 10010 11111 00010 00010',
+  5: '11111 10000 11110 00001 00001 10001 01110',
+  6: '00110 01000 10000 11110 10001 10001 01110',
+  7: '11111 00001 00010 00100 01000 01000 01000',
+  8: '01110 10001 10001 01110 10001 10001 01110',
+  9: '01110 10001 10001 01111 00001 00010 01100',
+  ',': '00000 00000 00000 00000 00110 00100 01000',
+  ':': '00000 00110 00110 00000 00110 00110 00000',
+  '+': '00000 00100 00100 11111 00100 00100 00000',
+  '/': '00001 00010 00010 00100 01000 01000 10000',
 };
 const GLYPHS = Object.fromEntries(Object.entries(G).map(([k, v]) => [k, v.split(' ')]));
 
@@ -51,7 +66,24 @@ export const MENU_ITEMS = [
 ];
 const ITEM_Y0 = 40, ITEM_STEP = 17;
 const itemRect = (i) => ({ x: 10, y: ITEM_Y0 + i * ITEM_STEP - 4, w: W - 20, h: 15 });
-const BACK_RECT = { x: 10, y: H - 22, w: 80, h: 15 };
+const BACK_RECT = { x: 10, y: H - 22, w: 62, h: 15 };
+const OPEN_RECT = { x: 88, y: H - 22, w: 62, h: 15 };
+const TAB_NAMES = ['INFO', 'STACK', 'ROL'];
+const tabRect = (i) => ({ x: 10 + i * 48, y: 32, w: 44, h: 12 });
+const WRAP = 23;
+
+function wrap(text) {
+  const lines = [];
+  text.split('\n').forEach((para) => {
+    let line = '';
+    para.split(' ').forEach((word) => {
+      if (line && (line + ' ' + word).length > WRAP) { lines.push(line); line = word; }
+      else line = line ? line + ' ' + word : word;
+    });
+    lines.push(line);
+  });
+  return lines;
+}
 
 export function createPixelScreen() {
   const canvas = document.createElement('canvas');
@@ -64,7 +96,7 @@ export function createPixelScreen() {
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.generateMipmaps = false;
 
-  const state = { mode: 'face', hover: -1, page: null };
+  const state = { mode: 'face', hover: -1, page: null, project: null, tab: 0 };
 
   const textWidth = (str, scale) => str.length * 6 * scale - scale;
   function drawText(str, x, y, scale = 1, limit = Infinity) {
@@ -185,19 +217,55 @@ export function createPixelScreen() {
     });
   }
 
+  function button(rect, label) {
+    const on = state.hover === rect.id;
+    if (on) {
+      ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+      ctx.fillStyle = BG;
+    } else {
+      ctx.fillRect(rect.x, rect.y, rect.w, 1); ctx.fillRect(rect.x, rect.y + rect.h - 1, rect.w, 1);
+      ctx.fillRect(rect.x, rect.y, 1, rect.h); ctx.fillRect(rect.x + rect.w - 1, rect.y, 1, rect.h);
+    }
+    drawText(label, rect.x + Math.round((rect.w - textWidth(label, 1)) / 2), rect.y + Math.round((rect.h - 7) / 2), 1);
+    ctx.fillStyle = FG;
+  }
+  const BACK = { ...BACK_RECT, id: 100 }, OPEN = { ...OPEN_RECT, id: 101 };
+
   function drawPage(t) {
     const item = MENU_ITEMS.find((m) => m.key === state.page);
     centered(item ? item.label : '', 12, item && item.label.length > 10 ? 1 : 2);
     ctx.fillRect(10, 30, W - 20, 2);
     centered('PROXIMAMENTE', 55, 1);
     if (Math.floor(t * 2) % 2 === 0) ctx.fillRect(W / 2 - 3, 70, 6, 7);
-    const on = state.hover === 100;
-    if (on) {
-      ctx.fillRect(BACK_RECT.x, BACK_RECT.y, BACK_RECT.w, BACK_RECT.h);
-      ctx.fillStyle = BG;
-    }
-    drawText('< VOLVER', BACK_RECT.x + 4, BACK_RECT.y + 4, 1);
-    ctx.fillStyle = FG;
+    button(BACK, '< VOLVER');
+  }
+
+  function drawProjects(t) {
+    centered('PROYECTOS', 8, 2);
+    ctx.fillRect(10, 30, W - 20, 2);
+    PROJECTS.forEach((pr, i) => {
+      const r = itemRect(i), on = state.hover === i;
+      if (on) { ctx.fillRect(r.x, r.y, r.w, r.h); ctx.fillStyle = BG; }
+      drawText((on ? '> ' : '  ') + pr.name, r.x + 4, r.y + 4, 1);
+      ctx.fillStyle = FG;
+    });
+    drawText('  MAS PRONTO' + (Math.floor(t * 2) % 2 ? '' : '_'), 14, ITEM_Y0 + PROJECTS.length * ITEM_STEP, 1);
+    button(BACK, '< VOLVER');
+  }
+
+  function drawProject() {
+    const pr = PROJECTS.find((x) => x.key === state.project);
+    if (!pr) return;
+    centered(pr.name, 5, 3);
+    TAB_NAMES.forEach((n, i) => {
+      const r = tabRect(i), on = state.tab === i, hov = state.hover === 200 + i;
+      if (on || hov) { ctx.fillRect(r.x, r.y, r.w, r.h); ctx.fillStyle = BG; }
+      drawText(n, r.x + Math.round((r.w - textWidth(n, 1)) / 2), r.y + 3, 1);
+      ctx.fillStyle = FG;
+    });
+    wrap(pr.tabs[TAB_NAMES[state.tab]]).slice(0, 5).forEach((line, i) => drawText(line, 10, 48 + i * 9, 1));
+    button(BACK, '< VOLVER');
+    button(OPEN, 'ABRIR >');
   }
 
   function draw(t, blink) {
@@ -206,6 +274,8 @@ export function createPixelScreen() {
     ctx.fillStyle = FG;
     if (state.mode === 'menu') drawMenu(t);
     else if (state.mode === 'page') drawPage(t);
+    else if (state.mode === 'projects') drawProjects(t);
+    else if (state.mode === 'project') drawProject();
     else drawFace(t, blink);
 
     // Scanlines CRT
@@ -218,8 +288,19 @@ export function createPixelScreen() {
 
   // x, y en coordenadas del canvas. Devuelve índice de ítem, 100 = volver, -1 = nada
   function hitTest(x, y) {
-    if (state.mode === 'menu') return MENU_ITEMS.findIndex((_, i) => inside(itemRect(i), x, y));
-    if (state.mode === 'page') return inside(BACK_RECT, x, y) ? 100 : -1;
+    const { mode } = state;
+    if (mode === 'menu') return MENU_ITEMS.findIndex((_, i) => inside(itemRect(i), x, y));
+    if (mode === 'page') return inside(BACK_RECT, x, y) ? 100 : -1;
+    if (mode === 'projects') {
+      if (inside(BACK_RECT, x, y)) return 100;
+      return PROJECTS.findIndex((_, i) => inside(itemRect(i), x, y));
+    }
+    if (mode === 'project') {
+      if (inside(BACK_RECT, x, y)) return 100;
+      if (inside(OPEN_RECT, x, y)) return 101;
+      const tab = TAB_NAMES.findIndex((_, i) => inside(tabRect(i), x, y));
+      return tab >= 0 ? 200 + tab : -1;
+    }
     return -1;
   }
 
@@ -227,6 +308,10 @@ export function createPixelScreen() {
     texture, draw, hitTest, state, size: { W, H },
     setOverride(n) { override = n; },
     expressions: NAMES, setExpression(n) { expr = n; nextAt = Infinity; },
-    setMode(mode, page = null) { state.mode = mode; state.page = page; state.hover = -1; },
+    setMode(mode, page = null, project = null) {
+      state.mode = mode; state.page = page; state.project = project; state.tab = 0; state.hover = -1;
+    },
+    setTab(i) { state.tab = i; },
+    currentProject: () => PROJECTS.find((x) => x.key === state.project),
   };
 }
