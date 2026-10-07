@@ -82,7 +82,7 @@ function deer() {
   });
   return {
     g, head, mouth: [0.4, -0.1, 0], dip: [0.32, 0.9], scale: 1.3, speed: 2.1, ground: true, z: [-3.5, -5.5], shadow: [1.0, 0.4],
-    pose(ph, move, idle, t, look) {
+    pose(ph, move, idle, t, look, greet = 0) {
       legs.forEach(({ hip, knee, off }) => {
         const s = Math.sin(ph * 0.7 + off);
         hip.rotation.z = s * 0.42 * move;
@@ -91,7 +91,12 @@ function deer() {
       g.position.y = Math.abs(Math.sin(ph * 0.7)) * 0.03 * move;
       head.rotation.y = look;
       head.rotation.z = Math.sin(ph * 0.7) * 0.05 * move - 0.08 * idle;
-      tail.rotation.z = 0.3 + Math.sin(t * 9) * 0.25 * (0.3 + idle);
+      tail.rotation.z = 0.3 + Math.sin(t * 9) * 0.25 * (0.3 + idle) + Math.sin(t * 14) * 0.3 * greet;
+      // saludo: reverencia con la cabeza y levanta una pata delantera
+      head.rotation.z -= 0.45 * Math.abs(Math.sin(t * 3.2)) * greet;
+      const paw = Math.max(0, Math.sin(t * 5)) * greet;
+      legs[0].hip.rotation.z += 0.6 * paw;
+      legs[0].knee.rotation.z -= 0.9 * paw;
     },
   };
 }
@@ -132,12 +137,15 @@ function fox() {
   });
   return {
     g, head, mouth: [0.44, -0.1, 0], dip: [0.2, 0.6], scale: 1.6, speed: 4.2, ground: true, z: [-3.2, -5], shadow: [0.75, 0.3],
-    pose(ph, move, idle, t, look) {
+    pose(ph, move, idle, t, look, greet = 0) {
       legs.forEach(({ hip, off }) => { hip.rotation.z = Math.sin(ph * 1.4 + off) * 0.6 * move; });
       g.position.y = Math.abs(Math.sin(ph * 1.4)) * 0.05 * move;
       tail.rotation.z = 0.35 + Math.sin(ph * 1.4) * 0.12 * move + Math.sin(t * 3) * 0.2 * idle;
       head.rotation.y = look;
-      head.rotation.z = 0.12 * idle * Math.sin(t * 1.5);
+      head.rotation.z = 0.12 * idle * Math.sin(t * 1.5) + 0.15 * greet;
+      // saludo: pata delantera arriba moviéndose y cola feliz
+      legs[0].hip.rotation.z += (1.3 + Math.sin(t * 10) * 0.35) * greet;
+      tail.rotation.y = Math.sin(t * 14) * 0.6 * greet;
     },
   };
 }
@@ -170,11 +178,12 @@ function rabbit(opts = {}) {
   });
   return {
     g, head, mouth: [0.25, -0.07, 0], dip: [0.15, 0.5], scale: 1.9, speed: 3.2, ground: true, z: [-3.2, -5], shadow: [0.45, 0.3],
-    pose(ph, move, idle, t, look) {
+    pose(ph, move, idle, t, look, greet = 0) {
       const hop = Math.abs(Math.sin(ph * 0.9)) * move;
       g.position.y = hop * 0.38;
-      g.rotation.z = Math.cos(ph * 0.9) * 0.18 * move;
-      ears.forEach(({ ear, s }) => ear.rotation.set(s * (0.18 + Math.sin(t * 11 + s) * 0.08 * idle), 0, 0.25 + hop * 0.35));
+      g.rotation.z = Math.cos(ph * 0.9) * 0.18 * move + 0.55 * greet; // saludo: se para en las patas traseras
+      g.position.y += 0.06 * greet;
+      ears.forEach(({ ear, s }) => ear.rotation.set(s * (0.18 + Math.sin(t * 11 + s) * 0.08 * idle + Math.sin(t * 12) * 0.25 * greet), 0, 0.25 + hop * 0.35));
       const twitch = 1 + Math.max(0, Math.sin(t * 22)) * 0.4 * idle;
       nose.scale.set(0.025 * twitch, 0.022 * twitch, 0.03 * twitch);
       head.rotation.z = 0;
@@ -227,6 +236,7 @@ const easeInOut = (x) => {
 };
 
 export function createAnimals(scene, floorY, blobTex, fruits, opts = {}) {
+  const greeter = opts.greeter; // el robot: { can(), start(x, z, dur) }
   const active = [];
   let nextAt = 7;      // el primero aparece a los 7 s
   let last = null, wantGround = false;
@@ -243,9 +253,9 @@ export function createAnimals(scene, floorY, blobTex, fruits, opts = {}) {
     };
   }
 
-  function spawn(type, { x } = {}) {
+  function spawn(type, { x, greet, dir: forcedDir } = {}) {
     const a = BUILDERS[type](opts);
-    const dir = Math.random() < 0.5 ? -1 : 1;
+    const dir = forcedDir ?? (Math.random() < 0.5 ? -1 : 1);
     const lane = a.z[0] + Math.random() * (a.z[1] - a.z[0]);
     const span = a.ground ? 12 : 14;
     const start = new THREE.Vector2(x ?? -dir * span, lane);
@@ -273,14 +283,17 @@ export function createAnimals(scene, floorY, blobTex, fruits, opts = {}) {
     holder.rotation.y = heading;
     holder.position.set(start.x, a.ground ? floorY : 3.2 + Math.random() * 2.2, start.y);
     scene.add(holder);
-    active.push({
+    const entry = {
       a, holder, shadow, dir, path, seg: 0, target, stopAt: target ? 1 : -1,
       heading, wantHeading: heading,
       phase: Math.random() * 6, move: 1, idle: 0, pick: 0, picking: null,
-      // ~70% de los que van de paso se detienen un momento a mirar a la cámara
-      pauseX: a.ground && !target && Math.random() < 0.7 ? (Math.random() * 2 - 1) * 5 : null,
+      // algunos de los que van de paso saludan al robot; de los demás, la mayoría se detiene a mirar a la cámara
+      greetX: a.ground && !target && (greet || Math.random() < 0.45) ? -dir * (2.8 + Math.random() * 0.8) : null,
+      greeting: null, greet: 0,
       pauseUntil: 0,
-    });
+    };
+    entry.pauseX = a.ground && !target && entry.greetX === null && Math.random() < 0.6 ? (Math.random() * 2 - 1) * 5 : null;
+    active.push(entry);
   }
 
   function remove(i) {
@@ -309,6 +322,22 @@ export function createAnimals(scene, floorY, blobTex, fruits, opts = {}) {
           an.pauseUntil = t + 1.8 + Math.random() * 1.6;
         }
 
+        // saludar al robot: se detiene a su lado y lo mira
+        if (an.greetX !== null && (an.dir > 0 ? pos.x >= an.greetX : pos.x <= an.greetX)) {
+          an.greetX = null;
+          if (greeter && greeter.can()) {
+            an.greeting = { t0: t, dur: 2.8 };
+            an.pauseUntil = t + 2.8;
+            greeter.start(pos.x, pos.z, 2.8);
+          }
+        }
+        if (an.greeting) {
+          const gt = t - an.greeting.t0, d = an.greeting.dur;
+          an.greet = gt < 0.4 ? easeInOut(gt / 0.4) : gt > d - 0.4 ? easeInOut((d - gt) / 0.4) : 1;
+          an.wantHeading = Math.atan2(pos.z, -pos.x); // de frente hacia el robot (en el origen)
+          if (gt > d) { an.greeting = null; an.greet = 0; }
+        }
+
         // recoger la fruta: agacha la cabeza, la toma con la boca, mira a la cámara
         if (an.picking) {
           const pt = t - an.picking.t0, fruit = an.target.mesh;
@@ -327,7 +356,7 @@ export function createAnimals(scene, floorY, blobTex, fruits, opts = {}) {
         const lookTime = !an.picking || t - an.picking.t0 > 1.1;
         const k = Math.min(1, dt * 5);
         an.move += ((stopped ? 0 : 1) - an.move) * k;
-        an.idle += ((stopped && lookTime ? 1 : 0) - an.idle) * k;
+        an.idle += ((stopped && lookTime && !an.greeting ? 1 : 0) - an.idle) * k;
 
         // avanzar por el camino
         const next = an.path[an.seg + 1];
@@ -355,7 +384,7 @@ export function createAnimals(scene, floorY, blobTex, fruits, opts = {}) {
         const look = Math.max(-1.1, Math.min(1.1, wrapAngle(-Math.PI / 2 - an.heading))) * an.idle;
         an.phase += dt * a.speed * 2.2 * an.move;
         a.g.rotation.z = 0;
-        a.pose(an.phase, an.move, an.idle, t, look);
+        a.pose(an.phase, an.move, an.idle, t, look, an.greet);
         if (a.head) {
           a.g.rotation.z -= a.dip[0] * an.pick;   // se inclina hacia adelante
           a.head.rotation.z -= a.dip[1] * an.pick; // y agacha la cabeza

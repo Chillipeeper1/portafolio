@@ -149,6 +149,11 @@ export function createPixelScreen() {
 
   const EXPRESSIONS = {
     neutral: (t, blink) => { bars(blink); rect(56, 84, 48, 6); },
+    hello: () => {
+      const txt = tr('hello');
+      drawText(txt, Math.round((W - textWidth(txt, 4)) / 2), 22, 4);
+      smile();
+    },
     happy: () => { caret(EYE_L); caret(EYE_R); smile(); },
     sad: (t, blink) => {
       bars(blink, 16, 14); frown();
@@ -179,7 +184,7 @@ export function createPixelScreen() {
       rect(56, 84, 48, 4); rect(52, 88, 4, 4); rect(104, 88, 4, 4);
     },
   };
-  const NAMES = Object.keys(EXPRESSIONS);
+  const NAMES = Object.keys(EXPRESSIONS).filter((n) => n !== 'hello'); // 'hello' solo se usa al saludar
   const POOL = ['neutral', 'neutral', ...NAMES.filter((n) => n !== 'neutral')];
   let expr = 'neutral', nextAt = 3, override = null;
 
@@ -192,7 +197,7 @@ export function createPixelScreen() {
     EXPRESSIONS[override || expr](t, blink);
 
     const phase = t % PERIOD;
-    if (phase < TEXT_AT) return;
+    if (phase < TEXT_AT || override) return; // sin "CLICK ON ME" mientras hay una expresión forzada
     // "CLICK ON ME" tipo terminal
     ctx.fillStyle = BG;
     ctx.fillRect(0, 0, W, H);

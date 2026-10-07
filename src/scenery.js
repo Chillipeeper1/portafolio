@@ -142,7 +142,7 @@ function grassTexture(rand, { base, spots: greens }) {
   return tex;
 }
 
-export function createScenery(scene, floorY, season = currentSeason()) {
+export function createScenery(scene, floorY, { season = currentSeason(), greeter } = {}) {
   const S = PALETTES[season];
   const rand = rng(2026);
   const between = (a, b) => a + rand() * (b - a);
@@ -657,7 +657,7 @@ export function createScenery(scene, floorY, season = currentSeason()) {
     };
   }
 
-  const animals = createAnimals(scene, floorY, blobTex, fruits, { rabbitFur: S.rabbitFur, rabbitBack: S.rabbitBack, shadow: S.shadow });
+  const animals = createAnimals(scene, floorY, blobTex, fruits, { rabbitFur: S.rabbitFur, rabbitBack: S.rabbitBack, shadow: S.shadow, greeter });
 
   return {
     season,

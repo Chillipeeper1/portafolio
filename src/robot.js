@@ -134,7 +134,16 @@ export function createRobot(container) {
   };
   const flat = (mesh, y) => { mesh.rotation.x = -Math.PI / 2; mesh.position.y = y; scene.add(mesh); return mesh; };
   // escenario: cielo, nubes, pasto y árboles
-  const scenery = createScenery(scene, FLOOR_Y);
+  // Saludo con los animales: un animal avisa que lo está saludando y el robot responde
+  let greet = null;
+  const greeter = {
+    can: () => !zoomed && !dizzy && !action && !greet,
+    start(x, z, dur) {
+      greet = { t0: clock.getElapsedTime(), x, z, dur };
+      pixelScreen.setOverride('hello');
+    },
+  };
+  const scenery = createScenery(scene, FLOOR_Y, { greeter });
   // luz según la estación
   hemi.color.set(scenery.light.hemiSky);
   hemi.groundColor.set(scenery.light.hemiGround);
@@ -344,9 +353,20 @@ export function createRobot(container) {
     lastT = t;
     const still = zoomed || dizzy;
     const mx = still ? 0 : mouseTarget.x, my = still ? 0 : mouseTarget.y;
-    head.rotation.y += (mx * 0.6 - head.rotation.y) * 0.08;
-    head.rotation.x += (my * 0.3 - head.rotation.x) * 0.08;
-    yaw += (mx * 0.25 - yaw) * 0.04;
+    // si un animal lo saluda, voltea hacia él (por encima del hombro) en vez de seguir el mouse
+    let genv = 0, gYaw = 0;
+    if (greet) {
+      const ge = t - greet.t0;
+      genv = ge < 0.35 ? ge / 0.35 : ge > greet.dur - 0.4 ? Math.max(0, (greet.dur - ge) / 0.4) : 1;
+      gYaw = Math.max(-1.25, Math.min(1.25, Math.atan2(greet.x - robot.position.x, greet.z)));
+      if (ge > greet.dur || zoomed) {
+        greet = null;
+        pixelScreen.setOverride(null);
+      }
+    }
+    head.rotation.y += ((greet ? gYaw : mx * 0.6) - head.rotation.y) * 0.08;
+    head.rotation.x += ((greet ? -0.1 : my * 0.3) - head.rotation.x) * 0.08;
+    yaw += ((greet ? gYaw * 0.35 : mx * 0.25) - yaw) * 0.04;
     // Cámara: zoom suave hacia la cara
     const target = zoomed ? camZoom : camHome;
     cam.pos.lerp(target.pos, 0.07);
@@ -359,7 +379,7 @@ export function createRobot(container) {
     let offX = 0, offY = 0, extraYaw = 0, tiltZ = 0, headZ = 0;
 
     // Planificador de acciones
-    if (!action && !zoomed && !dizzy && t > nextAction) {
+    if (!action && !zoomed && !dizzy && !greet && t > nextAction) {
       const type = lastType === 'walk' ? 'dance' : lastType === 'dance' ? 'walk' : (Math.random() < 0.5 ? 'walk' : 'dance');
       action = { type, t0: t, dur: ACTIONS[type], ending: false };
       lastType = type;
@@ -413,9 +433,17 @@ export function createRobot(container) {
     legL.rotation.x = legLx * env;
     legR.rotation.x = legRx * env;
 
+    // saluda con el brazo del lado del animal
+    if (genv > 0) {
+      const w = Math.sin(t * 11) * 0.35;
+      if (gYaw < 0) armL.rotation.z += (-2.6 + w - armL.rotation.z) * genv;
+      else armR.rotation.z += (2.6 - w - armR.rotation.z) * genv;
+    }
+
     // --- Mareo ---
     if (dizzyReq && !dizzy && !zoomed && t > dizzyCooldown) {
       dizzy = { t0: t, dir: Math.random() < 0.5 ? -1 : 1 };
+      greet = null;
       action = null;
       env = 0;
       pixelScreen.setOverride('dizzy');
