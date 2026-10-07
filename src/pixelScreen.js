@@ -257,8 +257,16 @@ export function createPixelScreen() {
     button(BACK, tr('back'));
   }
 
+  function drawAbout() {
+    centered(tr('about'), 12, 2);
+    ctx.fillRect(10, 30, W - 20, 2);
+    wrap(tr('aboutText')).slice(0, 6).forEach((line, i) => drawText(line, 10, 38 + i * 9, 1));
+    button(BACK, tr('back'));
+  }
+
   function drawPage(t) {
     if (state.page === 'contact') { drawContact(); return; }
+    if (state.page === 'about') { drawAbout(); return; }
     const item = MENU_ITEMS.find((m) => m.key === state.page);
     const title = item ? tr(item.label) : '';
     centered(title, 12, title.length > 10 ? 1 : 2);
