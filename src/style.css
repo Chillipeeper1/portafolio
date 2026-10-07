@@ -11,7 +11,7 @@ main { position: fixed; inset: 0; }
   color: #8ff7ff; text-shadow: 0 0 8px rgba(79, 195, 255, 0.45);
 }
 .brand span { color: #ff6b3d; }
-@media (max-width: 520px) { .brand { font-size: 9px; top: 16px; left: 16px; } }
+@media (max-width: 520px) { .brand { font-size: 8px; top: 16px; left: 12px; max-width: calc(100% - 150px); } }
 
 .hint {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 1;
