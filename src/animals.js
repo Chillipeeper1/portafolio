@@ -142,8 +142,8 @@ function fox() {
   };
 }
 
-function rabbit() {
-  const fur = '#c2ab8f', back = '#a8916f', light = '#f2ebe0', inner = '#e9a6b2';
+function rabbit(opts = {}) {
+  const fur = opts.rabbitFur ?? '#c2ab8f', back = opts.rabbitBack ?? '#a8916f', light = '#f2ebe0', inner = '#e9a6b2';
   const g = new THREE.Group();
   g.add(ell(0.3, 0.26, 0.23, fur, [0, 0.31, 0]));
   g.add(ell(0.24, 0.13, 0.19, back, [-0.02, 0.45, 0]));
@@ -226,14 +226,14 @@ const easeInOut = (x) => {
   return x * x * (3 - 2 * x);
 };
 
-export function createAnimals(scene, floorY, blobTex, fruits) {
+export function createAnimals(scene, floorY, blobTex, fruits, opts = {}) {
   const active = [];
   let nextAt = 7;      // el primero aparece a los 7 s
   let last = null, wantGround = false;
   const names = Object.keys(BUILDERS);
   const shadowGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
   shadowGeo.userData.shared = true;
-  const shadowMat = new THREE.MeshBasicMaterial({ map: blobTex, color: 0x0f2a12, transparent: true, opacity: 0.45, depthWrite: false });
+  const shadowMat = new THREE.MeshBasicMaterial({ map: blobTex, color: opts.shadow ?? 0x0f2a12, transparent: true, opacity: 0.45, depthWrite: false });
 
   // Cuando cae una fruta, llega pronto un animal de tierra a recogerla
   if (fruits) {
@@ -244,7 +244,7 @@ export function createAnimals(scene, floorY, blobTex, fruits) {
   }
 
   function spawn(type, { x } = {}) {
-    const a = BUILDERS[type]();
+    const a = BUILDERS[type](opts);
     const dir = Math.random() < 0.5 ? -1 : 1;
     const lane = a.z[0] + Math.random() * (a.z[1] - a.z[0]);
     const span = a.ground ? 12 : 14;

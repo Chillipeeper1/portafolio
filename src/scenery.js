@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createAnimals } from './animals.js';
+import { PALETTES, currentSeason } from './seasons.js';
 
 // Ruido suave barato (suma de senos) para deformar geometrías y que se vean orgánicas
 const noise3 = (x, y, z, k) =>
@@ -98,12 +99,9 @@ function canvasTexture(w, h, draw) {
   return tex;
 }
 
-const skyTexture = () => canvasTexture(2, 512, (g) => {
+const skyTexture = (stops) => canvasTexture(2, 512, (g) => {
   const grad = g.createLinearGradient(0, 0, 0, 512);
-  grad.addColorStop(0, '#2f86e0');
-  grad.addColorStop(0.45, '#6fb8f0');
-  grad.addColorStop(0.8, '#bfe6fb');
-  grad.addColorStop(1, '#eef6ea');
+  [0, 0.45, 0.8, 1].forEach((o, i) => grad.addColorStop(o, stops[i]));
   g.fillStyle = grad;
   g.fillRect(0, 0, 2, 512);
 });
@@ -118,12 +116,11 @@ const blobTexture = () => canvasTexture(64, 64, (g) => {
   g.fillRect(0, 0, 64, 64);
 });
 
-function grassTexture(rand) {
+function grassTexture(rand, { base, spots: greens }) {
   const N = 256;
   const tex = canvasTexture(N, N, (g) => {
-    g.fillStyle = '#55ad4d';
+    g.fillStyle = base;
     g.fillRect(0, 0, N, N);
-    const greens = ['#4a9f43', '#62b957', '#3f9139', '#6fc362', '#5aa84e', '#78c96a'];
     for (let i = 0; i < 900; i++) {
       const x = rand() * N, y = rand() * N, r = 3 + rand() * 14;
       g.globalAlpha = 0.18 + rand() * 0.22;
@@ -145,7 +142,8 @@ function grassTexture(rand) {
   return tex;
 }
 
-export function createScenery(scene, floorY) {
+export function createScenery(scene, floorY, season = currentSeason()) {
+  const S = PALETTES[season];
   const rand = rng(2026);
   const between = (a, b) => a + rand() * (b - a);
   const pickFrom = (arr) => arr[Math.floor(rand() * arr.length)];
@@ -153,8 +151,8 @@ export function createScenery(scene, floorY) {
   // zona despejada alrededor del robot (pies, caminata y caídas)
   const inRobotZone = (x, z, pad = 0) => Math.abs(x) < 2.4 + pad && z > -1.4 - pad && z < 1.8 + pad;
 
-  scene.background = skyTexture();
-  scene.fog = new THREE.Fog(0xcfeaff, 24, 70);
+  scene.background = skyTexture(S.sky);
+  scene.fog = new THREE.Fog(S.fog, 24, 70);
 
   const lambert = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, ...extra });
   const foliageGeos = [0, 1, 2].map((k) => foliageGeometry(k * 2.7 + 0.4));
@@ -206,7 +204,7 @@ export function createScenery(scene, floorY) {
   });
 
   // --- Suelo ---
-  const ground = new THREE.Mesh(new THREE.CircleGeometry(80, 64), new THREE.MeshLambertMaterial({ map: grassTexture(rand) }));
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(80, 64), new THREE.MeshLambertMaterial({ map: grassTexture(rand, S.ground) }));
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = floorY - 0.02;
   scene.add(ground);
@@ -218,7 +216,7 @@ export function createScenery(scene, floorY) {
     new THREE.MeshBasicMaterial({ map: blobTex, transparent: true, opacity: 0.32, depthWrite: false }),
     PATCHES,
   );
-  const patchColors = ['#86d070', '#3f8d3b', '#a9c95a', '#5fb552'].map((c) => new THREE.Color(c));
+  const patchColors = S.patches.map((c) => new THREE.Color(c));
   for (let i = 0; i < PATCHES; i++) {
     const r = between(1.5, 4.5);
     m.compose(pos.set(between(-24, 24), floorY - 0.01, between(-22, 6)), q.setFromEuler(e.set(0, rand() * 6, 0)), sc.set(r * 2, 1, r * between(1.2, 2)));
@@ -233,7 +231,7 @@ export function createScenery(scene, floorY) {
 
   // --- Colinas ---
   [[-26, -42, 22, 9], [10, -50, 30, 12], [38, -40, 20, 8], [-52, -55, 28, 11]].forEach(([x, z, w, h], i) => {
-    const hill = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 20), lambert(i % 2 ? 0x6bb56a : 0x58a65a));
+    const hill = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 20), lambert(S.hills[i % 2]));
     hill.scale.set(w, h, w * 0.6);
     hill.position.set(x, floorY - h * 0.25, z);
     scene.add(hill);
@@ -242,7 +240,7 @@ export function createScenery(scene, floorY) {
   // --- Línea de bosque lejano ---
   const LINE = 170;
   const treeLine = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 10).translate(0, 0.5, 0), lambert(0xffffff), LINE);
-  const lineColors = ['#2f6b45', '#2a6340', '#38774c', '#2d7048'].map((c) => new THREE.Color(c));
+  const lineColors = S.treeLine.map((c) => new THREE.Color(c));
   for (let i = 0; i < LINE; i++) {
     const r = between(0.9, 1.7), h = between(3.2, 7);
     m.compose(pos.set(between(-75, 75), floorY - 0.1, between(-27, -40)), q.identity(), sc.set(r, h, r));
@@ -263,7 +261,7 @@ export function createScenery(scene, floorY) {
   }
   const BLADES = 3600;
   const blades = new THREE.InstancedMesh(bladeGeo, windy(lambert(0xffffff, { vertexColors: true })), BLADES);
-  const bladeColors = ['#3f8f3a', '#4fa548', '#5dba52', '#2f7d33', '#7ac765', '#8ccf62'].map((c) => new THREE.Color(c));
+  const bladeColors = S.blades.map((c) => new THREE.Color(c));
   for (let placed = 0; placed < BLADES;) {
     const cx = between(-18, 18), cz = between(-14, 4.5);
     if (inRobotZone(cx, cz)) continue;
@@ -278,15 +276,16 @@ export function createScenery(scene, floorY) {
       placed++;
     }
   }
+  blades.count = Math.floor(BLADES * S.bladeRatio); // en invierno la nieve tapa casi todo el pasto
   scene.add(blades);
 
   // --- Flores (tallo + corola + centro), también con viento ---
-  const FLOWERS = 110;
+  const FLOWERS = Math.max(1, S.flowers.count);
   const windyLambert = (c) => windy(lambert(c));
   const stems = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.012, 0.012, 1, 4).translate(0, 0.5, 0), windyLambert(0x3f8f3a), FLOWERS);
   const petals = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.085, 1), windyLambert(0xffffff), FLOWERS);
   const centers = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.035, 1), windyLambert(0xffc93c), FLOWERS);
-  const flowerColors = ['#ffffff', '#ffd54a', '#ff7eb6', '#b388ff', '#ff8a65', '#7ec8ff'].map((c) => new THREE.Color(c));
+  const flowerColors = S.flowers.colors.map((c) => new THREE.Color(c));
   const flowerSpots = [];
   for (let i = 0; i < FLOWERS;) {
     const x = between(-14, 14), z = between(-10, 5);
@@ -302,7 +301,7 @@ export function createScenery(scene, floorY) {
     centers.setMatrixAt(i, m);
     i++;
   }
-  scene.add(stems, petals, centers);
+  if (S.flowers.count > 0) scene.add(stems, petals, centers);
 
   // --- Árboles ---
   const TREE_SCALE = 2.4; // tamaño de los árboles
@@ -329,7 +328,7 @@ export function createScenery(scene, floorY) {
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.13 * s, 0.2 * s, 0.9 * s, 12), trunkMat);
     trunk.position.y = 0.45 * s;
     g.add(trunk);
-    const tiers = [[1.0, 1.1, 1.0, '#25683b'], [0.78, 1.0, 1.7, '#2c7744'], [0.55, 0.9, 2.3, '#378a52']];
+    const tiers = [[1.0, 1.1, 1.0, S.pine[0]], [0.78, 1.0, 1.7, S.pine[1]], [0.55, 0.9, 2.3, S.pine[2]]];
     tiers.forEach(([r, h, y, c]) => {
       const cone = new THREE.Mesh(pickFrom(pineGeos), lambert(jitter(c), { vertexColors: true }));
       cone.scale.set(r * s, h * s, r * s);
@@ -361,7 +360,10 @@ export function createScenery(scene, floorY) {
       br.rotation.z = -side * 0.7;
       g.add(br);
     });
-    const crowns = [[0, 1.9, 0, 1.0, '#4fae4a'], [0.55, 1.6, 0.2, 0.7, '#449e43'], [-0.5, 1.65, -0.1, 0.72, '#3f963f'], [0.1, 2.45, 0.1, 0.55, '#66c25a']];
+    // color de las copas según la estación (otoño: mezcla de naranjas; primavera: algunos árboles en flor)
+    const blossoming = S.blossom && rand() < S.blossomChance;
+    const crownColor = (i) => (S.crownPalette ? pickFrom(S.crownPalette) : blossoming ? pickFrom(S.blossom) : S.crowns[i]);
+    const crowns = [[0, 1.9, 0, 1.0], [0.55, 1.6, 0.2, 0.7], [-0.5, 1.65, -0.1, 0.72], [0.1, 2.45, 0.1, 0.55]].map((c, i) => [...c, crownColor(i)]);
     const crownMeshes = [];
     crowns.forEach(([dx, y, dz, r, c]) => {
       const crown = new THREE.Mesh(pickFrom(foliageGeos), lambert(jitter(c), { vertexColors: true }));
@@ -390,7 +392,7 @@ export function createScenery(scene, floorY) {
     .forEach(([x, z, s, kind], i) => ((kind ?? (i % 2 ? 'round' : 'pine')) === 'round' ? round(x, z, s * TREE_SCALE) : pine(x, z, s * TREE_SCALE)));
 
   // --- Arbustos (con bayas) ---
-  const bushColors = ['#3d9a45', '#47a64c', '#358c3e', '#52b055'];
+  const bushColors = S.bushes;
   [[-4.2, -2.4, 0.7], [4.5, -2.0, 0.65], [-7, -3.5, 0.9], [7.6, -4, 0.85], [-2, -9, 1.0], [2.6, -11, 1.1], [-12, -3, 1.0], [12.5, -1, 0.9], [-9.5, 1.5, 0.7], [9.8, 2.2, 0.75]]
     .forEach(([x, z, s]) => {
       const g = new THREE.Group();
@@ -419,7 +421,8 @@ export function createScenery(scene, floorY) {
   const fruitMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 2), lambert(0xffffff), apples.length);
   apples.forEach((a, i) => {
     a.idx = i;
-    fruitMesh.setMatrixAt(i, m.compose(a.pos, q.identity(), sc.set(a.r, a.r, a.r)));
+    const r = a.tree && !S.fruit ? 0 : a.r; // fuera de temporada no hay frutas en los árboles
+    fruitMesh.setMatrixAt(i, m.compose(a.pos, q.identity(), sc.set(r, r, r)));
     fruitMesh.setColorAt(i, a.color);
   });
   const coneMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 10, 8), lambert(0x8a5a2b), cones.length);
@@ -445,6 +448,7 @@ export function createScenery(scene, floorY) {
     take(f, t) { f.state = 'taken'; f.regrowAt = t + 10; },
   };
   function dropFruit() {
+    if (!S.fruit) return;
     // solo frutas visibles desde la cámara
     const options = apples.filter((a) => a.tree && !a.busy && a.pos.z > -10 && a.pos.z < -4 && Math.abs(a.pos.x) < 7.5 && Math.abs(a.pos.x) > 2.5);
     if (!options.length) return;
@@ -511,16 +515,17 @@ export function createScenery(scene, floorY) {
 
   // --- Hongos al pie de los árboles ---
   const shrooms = [];
-  trunkSpots.slice(0, 14).forEach(([x, z, s]) => {
+  trunkSpots.slice(0, Math.round(14 * S.mushrooms)).forEach(([x, z, s]) => {
     const n = 1 + Math.floor(rand() * 3);
     for (let k = 0; k < n; k++) {
       const a = rand() * Math.PI * 2, d = 0.32 * s + between(0.2, 0.7);
       shrooms.push([x + Math.cos(a) * d, z + Math.abs(Math.sin(a)) * d, between(1.4, 2.3)]);
     }
   });
-  const stemsS = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.05, 0.06, 0.18, 10).translate(0, 0.09, 0), lambert(0xf3eadc), shrooms.length);
-  const caps = new THREE.InstancedMesh(new THREE.SphereGeometry(0.14, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), lambert(0xd93a32), shrooms.length);
-  const dots = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.022, 0), lambert(0xffffff), shrooms.length * 4);
+  const SH = Math.max(1, shrooms.length);
+  const stemsS = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.05, 0.06, 0.18, 10).translate(0, 0.09, 0), lambert(0xf3eadc), SH);
+  const caps = new THREE.InstancedMesh(new THREE.SphereGeometry(0.14, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), lambert(0xd93a32), SH);
+  const dots = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.022, 0), lambert(0xffffff), SH * 4);
   shrooms.forEach(([x, z, s], i) => {
     stemsS.setMatrixAt(i, m.compose(pos.set(x, floorY, z), q.identity(), sc.set(s, s, s)));
     caps.setMatrixAt(i, m.compose(pos.set(x, floorY + 0.17 * s, z), q.identity(), sc.set(s, s * 0.75, s)));
@@ -530,12 +535,12 @@ export function createScenery(scene, floorY) {
       dots.setMatrixAt(i * 4 + k, m.compose(pos.set(x + v.x, floorY + 0.17 * s + v.y, z + v.z), q.identity(), sc.set(s, s, s)));
     }
   });
-  scene.add(stemsS, caps, dots);
+  if (shrooms.length) scene.add(stemsS, caps, dots);
 
   // Dibuja todas las sombras suaves juntas
   const blobMesh = new THREE.InstancedMesh(
     new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
-    new THREE.MeshBasicMaterial({ map: blobTex, color: 0x0f2a12, transparent: true, opacity: 0.38, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ map: blobTex, color: S.shadow, transparent: true, opacity: 0.38, depthWrite: false }),
     blobs.length,
   );
   blobs.forEach(([x, z, rx, rz], i) => blobMesh.setMatrixAt(i, m.compose(pos.set(x, floorY + 0.012, z), q.identity(), sc.set(rx * 2, 1, rz * 2))));
@@ -570,7 +575,7 @@ export function createScenery(scene, floorY) {
     return new THREE.ShapeGeometry(sh, 6).rotateX(-Math.PI / 2);
   })();
   const homes = [[-5, -2.6], [5.5, -3], [-8, -0.8], [8.2, 0.4], [-3.4, -5.5]];
-  const butterflies = ['#ffd23f', '#ff8a3d', '#7ec8ff', '#ff7eb6', '#ffffff'].map((color, i) => {
+  const butterflies = ['#ffd23f', '#ff8a3d', '#7ec8ff', '#ff7eb6', '#ffffff'].slice(0, S.butterflies).map((color, i) => {
     const g = new THREE.Group();
     g.add(new THREE.Mesh(new THREE.CapsuleGeometry(0.016, 0.1, 2, 4).rotateZ(Math.PI / 2), lambert(0x2b2b2b)));
     const wingMat = new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide });
@@ -590,22 +595,73 @@ export function createScenery(scene, floorY) {
     return { g, wings, cx, cz, y: floorY + between(0.5, 1.1), ph: rand() * 10, sp: between(0.7, 1.1), last: new THREE.Vector3(cx, 0, cz) };
   });
 
-  // --- Polen flotando (puntos cuadrados, estilo píxel) ---
-  const POLLEN = 160;
-  const pollenPos = new Float32Array(POLLEN * 3);
-  const pollenSeed = [];
-  for (let i = 0; i < POLLEN; i++) {
-    pollenPos.set([between(-14, 14), floorY + between(0.2, 4.5), between(-12, 6)], i * 3);
-    pollenSeed.push(rand() * 10);
+  // --- Partículas de la estación: polen (verano), nieve (invierno), pétalos (primavera), hojas (otoño) ---
+  let updateParticles = () => {};
+  if (S.particles === 'pollen' || S.particles === 'snow') {
+    const snow = S.particles === 'snow';
+    const N = snow ? 700 : 160, top = snow ? 9 : 4.5;
+    const arr = new Float32Array(N * 3), seeds = [];
+    for (let i = 0; i < N; i++) {
+      arr.set([between(-16, 16), floorY + between(0.2, top), between(-14, 7)], i * 3);
+      seeds.push(rand() * 10);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+    scene.add(new THREE.Points(geo, new THREE.PointsMaterial({
+      color: snow ? 0xffffff : 0xfff6c8, size: snow ? 0.09 : 0.06, transparent: true, opacity: snow ? 0.95 : 0.85, depthWrite: false,
+    })));
+    updateParticles = (t, dt) => {
+      const p = geo.attributes.position;
+      for (let i = 0; i < N; i++) {
+        let y = p.getY(i) + dt * (snow ? -0.7 : 0.12);
+        if (snow && y < floorY) y = floorY + top;
+        if (!snow && y > floorY + top + 0.3) y = floorY + 0.2;
+        p.setY(i, y);
+        p.setX(i, p.getX(i) + Math.sin(t * (snow ? 0.8 : 0.6) + seeds[i]) * dt * (snow ? 0.35 : 0.15));
+      }
+      p.needsUpdate = true;
+    };
+  } else {
+    // hojas o pétalos: planos pequeños que caen girando
+    const leaves = S.particles === 'leaves';
+    const N = leaves ? 70 : 90;
+    let geo;
+    if (leaves) {
+      const sh = new THREE.Shape();
+      sh.moveTo(0, -0.1);
+      sh.quadraticCurveTo(0.08, -0.02, 0, 0.1);
+      sh.quadraticCurveTo(-0.08, -0.02, 0, -0.1);
+      geo = new THREE.ShapeGeometry(sh, 4);
+    } else {
+      geo = new THREE.CircleGeometry(0.05, 8).scale(1, 0.6, 1);
+    }
+    const flakes = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ side: THREE.DoubleSide }), N);
+    const colors = (leaves ? ['#e8892b', '#d9622b', '#f2b234', '#c9442a'] : ['#f7b6d2', '#fbd0e2', '#ffffff', '#f3a0c4']).map((c) => new THREE.Color(c));
+    const ps = [];
+    for (let i = 0; i < N; i++) {
+      ps.push({ p: new THREE.Vector3(between(-14, 14), floorY + between(0, 8), between(-12, 6)), seed: rand() * 10, spin: between(1, 3), fall: between(0.35, 0.7) });
+      flakes.setColorAt(i, pickFrom(colors));
+    }
+    scene.add(flakes);
+    const pm = new THREE.Matrix4(), pq = new THREE.Quaternion(), pe = new THREE.Euler(), ps1 = new THREE.Vector3(1.6, 1.6, 1.6);
+    updateParticles = (t, dt) => {
+      ps.forEach((L, i) => {
+        L.p.y -= L.fall * dt;
+        L.p.x += Math.sin(t * 1.3 + L.seed) * dt * 0.5;
+        L.p.z += Math.cos(t * 0.9 + L.seed) * dt * 0.2;
+        if (L.p.y < floorY + 0.02) L.p.set((Math.random() * 2 - 1) * 14, floorY + 8, Math.random() * 18 - 12);
+        pe.set(t * L.spin + L.seed, t * L.spin * 0.7, Math.sin(t * 2 + L.seed) * 0.8);
+        flakes.setMatrixAt(i, pm.compose(L.p, pq.setFromEuler(pe), ps1));
+      });
+      flakes.instanceMatrix.needsUpdate = true;
+    };
   }
-  const pollenGeo = new THREE.BufferGeometry();
-  pollenGeo.setAttribute('position', new THREE.BufferAttribute(pollenPos, 3));
-  const pollen = new THREE.Points(pollenGeo, new THREE.PointsMaterial({ color: 0xfff6c8, size: 0.06, transparent: true, opacity: 0.85, depthWrite: false }));
-  scene.add(pollen);
 
-  const animals = createAnimals(scene, floorY, blobTex, fruits);
+  const animals = createAnimals(scene, floorY, blobTex, fruits, { rabbitFur: S.rabbitFur, rabbitBack: S.rabbitBack, shadow: S.shadow });
 
   return {
+    season,
+    light: S.light,
     spawnAnimal: animals.spawn,
     dropFruit,
     update(t, dt) {
@@ -630,14 +686,7 @@ export function createScenery(scene, floorY) {
         b.wings.forEach(({ w, s }) => { w.rotation.x = -s * flap; });
       });
 
-      const p = pollenGeo.attributes.position;
-      for (let i = 0; i < POLLEN; i++) {
-        let y = p.getY(i) + dt * 0.12;
-        if (y > floorY + 4.8) y = floorY + 0.2;
-        p.setY(i, y);
-        p.setX(i, p.getX(i) + Math.sin(t * 0.6 + pollenSeed[i]) * dt * 0.15);
-      }
-      p.needsUpdate = true;
+      updateParticles(t, dt);
     },
   };
 }

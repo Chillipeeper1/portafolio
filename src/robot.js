@@ -18,7 +18,8 @@ export function createRobot(container) {
   container.appendChild(renderer.domElement);
 
   // Luces
-  scene.add(new THREE.HemisphereLight(0xcfe8ff, 0x6a9a58, 1.1));
+  const hemi = new THREE.HemisphereLight(0xcfe8ff, 0x6a9a58, 1.1);
+  scene.add(hemi);
   const key = new THREE.DirectionalLight(0xfff2d6, 2.4);
   key.position.set(4, 6, 5);
   key.castShadow = true;
@@ -134,6 +135,10 @@ export function createRobot(container) {
   const flat = (mesh, y) => { mesh.rotation.x = -Math.PI / 2; mesh.position.y = y; scene.add(mesh); return mesh; };
   // escenario: cielo, nubes, pasto y árboles
   const scenery = createScenery(scene, FLOOR_Y);
+  // luz según la estación
+  hemi.color.set(scenery.light.hemiSky);
+  hemi.groundColor.set(scenery.light.hemiGround);
+  key.color.set(scenery.light.key);
   // sombra de contacto suave bajo los pies
   const contact = flat(new THREE.Mesh(
     new THREE.PlaneGeometry(3.4, 2.4),
