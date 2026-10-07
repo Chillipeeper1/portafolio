@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createAnimals } from './animals.js';
 
 // Escenario: cielo con nubes, pasto, árboles, arbustos, flores y colinas.
 // Todo con formas simples y texturas de píxeles para que combine con el estilo retro.
@@ -233,8 +234,12 @@ export function createScenery(scene, floorY) {
     clouds.push({ g, speed: between(0.15, 0.45) });
   }
 
+  const animals = createAnimals(scene, floorY);
+
   return {
+    spawnAnimal: animals.spawn,
     update(t, dt) {
+      animals.update(t, dt);
       clouds.forEach((c) => {
         c.g.position.x += c.speed * dt;
         if (c.g.position.x > 50) c.g.position.x = -50;
