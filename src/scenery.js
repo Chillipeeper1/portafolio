@@ -378,16 +378,16 @@ export function createScenery(scene, floorY) {
     for (let i = 0; i < 26; i++) {
       const d = new THREE.Vector3(rand() * 2 - 1, rand() * 1.2 - 0.3, rand() * 1.4 - 0.2).normalize();
       const r = 0.075 * s;
-      apples.push({ pos: surfacePoint(crownMeshes[i % 3], d).addScaledVector(d, r * 0.35), r, color: pickFrom(appleColors) });
+      apples.push({ pos: surfacePoint(crownMeshes[i % 3], d).addScaledVector(d, r * 0.35), r, color: pickFrom(appleColors), tree: true });
     }
     addBlob(x - 0.3 * s, z - 0.25 * s, 1.3 * s, 1.0 * s);
     trunkSpots.push([x, z, s]);
   }
 
   [[-8.5, -7, 1.1], [8.8, -8, 1.2], [-13, -11, 1.5], [14, -12, 1.6], [4.5, -18, 2.0], [-4, -20, 1.9], [-19, -6, 1.4], [20, -5, 1.4],
-    [-5.5, -6, 1.0], [6, -6.5, 1.1], [-10.5, -4.5, 1.2], [11.5, -5, 1.1], [-16, -9, 1.5], [17, -9.5, 1.4],
+    [-5.5, -6, 1.0, 'round'], [6, -6.5, 1.1], [-10.5, -4.5, 1.2], [11.5, -5, 1.1], [-16, -9, 1.5], [17, -9.5, 1.4],
     [-23, -12, 1.8], [24, -13, 1.8], [-28, -8, 1.6], [29, -9, 1.6], [-20, -17, 2.0], [21, -18, 2.0]]
-    .forEach(([x, z, s], i) => (i % 2 ? round(x, z, s * TREE_SCALE) : pine(x, z, s * TREE_SCALE)));
+    .forEach(([x, z, s, kind], i) => ((kind ?? (i % 2 ? 'round' : 'pine')) === 'round' ? round(x, z, s * TREE_SCALE) : pine(x, z, s * TREE_SCALE)));
 
   // --- Arbustos (con bayas) ---
   const bushColors = ['#3d9a45', '#47a64c', '#358c3e', '#52b055'];
@@ -418,12 +418,80 @@ export function createScenery(scene, floorY) {
   // Frutas y bayas (un solo InstancedMesh), piñas
   const fruitMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 2), lambert(0xffffff), apples.length);
   apples.forEach((a, i) => {
+    a.idx = i;
     fruitMesh.setMatrixAt(i, m.compose(a.pos, q.identity(), sc.set(a.r, a.r, a.r)));
     fruitMesh.setColorAt(i, a.color);
   });
   const coneMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 10, 8), lambert(0x8a5a2b), cones.length);
   cones.forEach((c, i) => coneMesh.setMatrixAt(i, m.compose(c.pos, q.identity(), sc.set(c.r * 0.7, c.r * 1.3, c.r * 0.7))));
   scene.add(fruitMesh, coneMesh);
+
+  // --- Frutas que se caen: rebotan, quedan en el suelo y un animal se las lleva ---
+  const fallenGeo = new THREE.IcosahedronGeometry(1, 2);
+  fallenGeo.userData.shared = true;
+  const fruitMats = new Map();
+  const fruitMat = (c) => {
+    const k = c.getHex();
+    if (!fruitMats.has(k)) fruitMats.set(k, lambert(c));
+    return fruitMats.get(k);
+  };
+  const hidden = new THREE.Matrix4().makeScale(0, 0, 0);
+  const fm = new THREE.Matrix4(), fq = new THREE.Quaternion(), fs = new THREE.Vector3();
+  const dropped = [];
+  let nextFall = 9 + rand() * 5;
+  const fruits = {
+    onLand: null,
+    available: () => dropped.find((f) => f.state === 'ground' && !f.claimed),
+    take(f, t) { f.state = 'taken'; f.regrowAt = t + 10; },
+  };
+  function dropFruit() {
+    // solo frutas visibles desde la cámara
+    const options = apples.filter((a) => a.tree && !a.busy && a.pos.z > -10 && a.pos.z < -4 && Math.abs(a.pos.x) < 7.5 && Math.abs(a.pos.x) > 2.5);
+    if (!options.length) return;
+    const a = options[Math.floor(Math.random() * options.length)];
+    a.busy = true;
+    fruitMesh.setMatrixAt(a.idx, hidden);
+    fruitMesh.instanceMatrix.needsUpdate = true;
+    const mesh = new THREE.Mesh(fallenGeo, fruitMat(a.color));
+    mesh.scale.setScalar(a.r);
+    mesh.position.copy(a.pos);
+    scene.add(mesh);
+    dropped.push({ a, mesh, r: a.r, vel: new THREE.Vector3((Math.random() - 0.5) * 0.8, 0, 1.2 + Math.random() * 0.8), state: 'falling', claimed: false });
+  }
+  function updateFruits(t, dt) {
+    if (t > nextFall) {
+      if (dropped.filter((f) => f.state === 'falling' || f.state === 'ground').length < 3) dropFruit();
+      nextFall = t + 14 + Math.random() * 10; // cada 14-24 s
+    }
+    for (const f of dropped) {
+      if (f.state === 'falling') {
+        f.vel.y -= 9.8 * dt;
+        f.mesh.position.addScaledVector(f.vel, dt);
+        f.mesh.rotation.x += f.vel.z * dt * 3;
+        f.mesh.rotation.z -= f.vel.x * dt * 3;
+        const groundY = floorY + f.r;
+        if (f.mesh.position.y <= groundY) {
+          f.mesh.position.y = groundY;
+          if (Math.abs(f.vel.y) > 1.2) {
+            f.vel.y = -f.vel.y * 0.35;
+            f.vel.x *= 0.75;
+            f.vel.z *= 0.75;
+          } else {
+            f.state = 'ground';
+            f.vel.set(0, 0, 0);
+            if (fruits.onLand) fruits.onLand(t);
+          }
+        }
+      } else if (f.state === 'taken' && t > f.regrowAt) {
+        // vuelve a crecer en el árbol
+        const k = Math.min(1, (t - f.regrowAt) / 1.5);
+        fruitMesh.setMatrixAt(f.a.idx, fm.compose(f.a.pos, fq.identity(), fs.setScalar(f.a.r * k)));
+        fruitMesh.instanceMatrix.needsUpdate = true;
+        if (k >= 1) { f.state = 'done'; f.a.busy = false; }
+      }
+    }
+    for (let i = dropped.length - 1; i >= 0; i--) if (dropped[i].state === 'done') dropped.splice(i, 1);
+  }
 
   // --- Rocas ---
   const ROCKS = 14;
@@ -535,12 +603,14 @@ export function createScenery(scene, floorY) {
   const pollen = new THREE.Points(pollenGeo, new THREE.PointsMaterial({ color: 0xfff6c8, size: 0.06, transparent: true, opacity: 0.85, depthWrite: false }));
   scene.add(pollen);
 
-  const animals = createAnimals(scene, floorY, blobTex);
+  const animals = createAnimals(scene, floorY, blobTex, fruits);
 
   return {
     spawnAnimal: animals.spawn,
+    dropFruit,
     update(t, dt) {
       wind.uTime.value = t;
+      updateFruits(t, dt);
       animals.update(t, dt);
 
       clouds.forEach((c) => {
