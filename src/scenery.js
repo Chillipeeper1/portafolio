@@ -114,40 +114,51 @@ export function createScenery(scene, floorY) {
   }
   scene.add(petals, stems);
 
-  // --- Árboles ---
-  const TREE_SCALE = 1.7; // tamaño de los árboles
-  const trunkMat = lambert(0x7a5230);
-  const pineMat = lambert(0x2e7d46);
-  const roundMat = lambert(0x4fae4a);
-  function pine(x, z, s) {
+  // --- Árboles gigantes: solo se ve el tronco, la copa queda fuera de cuadro ---
+  const bark = (() => {
+    const c = document.createElement('canvas');
+    c.width = 16; c.height = 16;
+    const g = c.getContext('2d');
+    const browns = ['#6e4a2a', '#7a5230', '#5f3f23', '#835a36', '#684528'];
+    for (let x = 0; x < 16; x++) {
+      const col = browns[Math.floor(rand() * browns.length)];
+      for (let y = 0; y < 16; y++) {
+        g.fillStyle = rand() < 0.18 ? browns[Math.floor(rand() * browns.length)] : col; // vetas verticales
+        g.fillRect(x, y, 1, 1);
+      }
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.NearestFilter;
+    tex.repeat.set(3, 10);
+    return tex;
+  })();
+  const trunkMat = new THREE.MeshLambertMaterial({ map: bark, flatShading: true });
+  function trunk(x, z, r) {
     const g = new THREE.Group();
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.13 * s, 0.18 * s, 0.9 * s, 6), trunkMat);
-    trunk.position.y = 0.45 * s;
-    g.add(trunk);
-    [[1.0, 1.1, 1.0], [0.78, 1.0, 1.7], [0.55, 0.9, 2.3]].forEach(([r, h, y]) => {
-      const cone = new THREE.Mesh(new THREE.ConeGeometry(r * s, h * s, 7), pineMat);
-      cone.position.y = y * s;
-      g.add(cone);
-    });
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.88, r, 34, 10), trunkMat);
+    stem.position.y = 17;
+    g.add(stem);
+    // base ensanchada con raíces
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.5, 1.1, 10), trunkMat);
+    base.position.y = 0.55;
+    g.add(base);
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + rand();
+      const root = new THREE.Mesh(new THREE.ConeGeometry(r * 0.38, r * 2.2, 5), trunkMat);
+      root.position.set(Math.cos(a) * r * 1.35, 0.25, Math.sin(a) * r * 1.35);
+      root.rotation.set(Math.sin(a) * 1.25, 0, -Math.cos(a) * 1.25);
+      g.add(root);
+    }
     g.position.set(x, floorY, z);
     g.rotation.y = rand() * 6;
     scene.add(g);
   }
-  function round(x, z, s) {
-    const g = new THREE.Group();
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16 * s, 0.22 * s, 1.2 * s, 6), trunkMat);
-    trunk.position.y = 0.6 * s;
-    g.add(trunk);
-    [[0, 1.9, 0, 1.0], [0.55, 1.6, 0.2, 0.7], [-0.5, 1.65, -0.1, 0.72]].forEach(([dx, y, dz, r]) => {
-      const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(r * s, 1), roundMat);
-      crown.position.set(dx * s, y * s, dz * s);
-      g.add(crown);
-    });
-    g.position.set(x, floorY, z);
-    scene.add(g);
-  }
-  [[-8.5, -7, 1.1], [8.8, -8, 1.2], [-13, -11, 1.5], [14, -12, 1.6], [4.5, -18, 2.0], [-4, -20, 1.9], [-19, -6, 1.4], [20, -5, 1.4]]
-    .forEach(([x, z, s], i) => (i % 2 ? round(x, z, s * TREE_SCALE) : pine(x, z, s * TREE_SCALE)));
+  [[-9, -6, 0.8], [8.5, -7, 0.9], [-14, -10, 1.0], [15, -11, 1.1], [-5.5, -15, 0.9], [4.5, -17, 1.0],
+    [-21, -5, 1.0], [22, -6, 1.0], [-27, -14, 1.2], [28, -15, 1.2]]
+    .forEach(([x, z, r]) => trunk(x, z, r));
 
   // --- Arbustos ---
   const bushMat = lambert(0x3d9a45);
