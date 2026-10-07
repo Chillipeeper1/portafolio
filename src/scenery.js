@@ -115,6 +115,7 @@ export function createScenery(scene, floorY) {
   scene.add(petals, stems);
 
   // --- Árboles ---
+  const TREE_SCALE = 1.7; // tamaño de los árboles
   const trunkMat = lambert(0x7a5230);
   const pineMat = lambert(0x2e7d46);
   const roundMat = lambert(0x4fae4a);
@@ -146,7 +147,7 @@ export function createScenery(scene, floorY) {
     scene.add(g);
   }
   [[-8.5, -7, 1.1], [8.8, -8, 1.2], [-13, -11, 1.5], [14, -12, 1.6], [4.5, -18, 2.0], [-4, -20, 1.9], [-19, -6, 1.4], [20, -5, 1.4]]
-    .forEach(([x, z, s], i) => (i % 2 ? round(x, z, s) : pine(x, z, s)));
+    .forEach(([x, z, s], i) => (i % 2 ? round(x, z, s * TREE_SCALE) : pine(x, z, s * TREE_SCALE)));
 
   // --- Arbustos ---
   const bushMat = lambert(0x3d9a45);
