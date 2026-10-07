@@ -1,18 +1,23 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Portafolio</title>
+  <title>Zabdiel Cervantes - Portfolio</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
-  <header class="brand">Zabdiel Cervantes <span>-</span> Portfolio</header>
-  <div class="hint">ESC O CLIC FUERA PARA SALIR</div>
-  <div class="bubble" id="bubble" aria-live="polite"><div class="bubble-title">¿SABIAS QUE...?</div><div class="bubble-text"></div></div>
+  <header class="brand" data-i18n="brand">Zabdiel Cervantes - Portfolio</header>
+  <div class="lang" role="group" aria-label="Language">
+    <button data-lang="en" class="active" aria-pressed="true">EN</button>
+    <span>|</span>
+    <button data-lang="es" aria-pressed="false">ES</button>
+  </div>
+  <div class="hint" data-i18n="hint">ESC OR CLICK OUTSIDE TO EXIT</div>
+  <div class="bubble" id="bubble" aria-live="polite"><div class="bubble-title" data-i18n="bubbleTitle">DID YOU KNOW...?</div><div class="bubble-text"></div></div>
   <main>
     <div id="robot"></div>
   </main>

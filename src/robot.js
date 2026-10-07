@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { createPixelScreen, MENU_ITEMS } from './pixelScreen.js';
 import { FACTS } from './facts.js';
 import { PROJECTS } from './projects.js';
+import { getLang, onLang } from './i18n.js';
 
 export function createRobot(container) {
   const scene = new THREE.Scene();
@@ -207,7 +208,7 @@ export function createRobot(container) {
     if (!p) { setZoom(false); return; } // clic fuera de la pantalla: salir
     if (mode === 'menu' && idx >= 0) {
       const { key } = MENU_ITEMS[idx];
-      if (key === 'proyectos') pixelScreen.setMode('projects');
+      if (key === 'projects') pixelScreen.setMode('projects');
       else pixelScreen.setMode('page', key);
     } else if (mode === 'page' && idx === 100) {
       pixelScreen.setMode('menu');
@@ -244,6 +245,7 @@ export function createRobot(container) {
   const bubbleText = bubble.querySelector('.bubble-text');
   const FACT_EVERY = 30, FACT_HOLD = 6, TYPE_SPEED = 28; // segundos, segundos, letras/s
   let nextFact = FACT_EVERY, fact = null, bag = [];
+  onLang(() => { fact = null; nextFact = clock.getElapsedTime() + 1; bubble.classList.remove('show'); });
   const anchor = new THREE.Vector3();
   const toScreen = (dx) => {
     head.getWorldPosition(anchor);
@@ -254,8 +256,8 @@ export function createRobot(container) {
   };
   function updateBubble(t) {
     if (!fact && !zoomed && t > nextFact) {
-      if (!bag.length) bag = [...FACTS].sort(() => Math.random() - 0.5);
-      const text = bag.pop();
+      if (!bag.length) bag = FACTS.map((_, i) => i).sort(() => Math.random() - 0.5);
+      const text = FACTS[bag.pop()][getLang()];
       fact = { text, start: t, end: t + text.length / TYPE_SPEED + FACT_HOLD };
     }
     if (fact && (zoomed || t > fact.end)) {

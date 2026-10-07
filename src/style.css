@@ -39,3 +39,18 @@ body.zoomed .hint { opacity: 0.8; }
 .bubble.flip::before { left: auto; right: -16px; clip-path: polygon(0 0, 0 100%, 100% 50%); }
 @media (max-width: 520px) { .bubble { width: 200px; font-size: 7px; padding: 10px 12px; } }
 .bubble.dock::before { display: none; }
+
+/* Selector de idioma */
+.lang {
+  position: fixed; top: 20px; right: 24px; z-index: 3; display: flex; gap: 10px; align-items: center;
+  font-family: 'Press Start 2P', ui-monospace, monospace; font-size: 12px; color: #8ff7ff;
+}
+.lang span { opacity: 0.4; }
+.lang button {
+  font: inherit; color: #8ff7ff; background: transparent; border: 2px solid transparent;
+  padding: 6px 8px; cursor: pointer; letter-spacing: 0.04em;
+}
+.lang button:hover { border-color: #8ff7ff; }
+.lang button.active { background: #8ff7ff; color: #0b3a45; }
+.lang button:focus-visible { outline: 2px dashed #ff6b3d; outline-offset: 2px; }
+@media (max-width: 520px) { .lang { top: 10px; right: 12px; font-size: 9px; } }

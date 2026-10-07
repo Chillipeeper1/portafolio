@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { PROJECTS } from './projects.js';
+import { t as tr, pick } from './i18n.js';
 
 // Fuente bitmap 5x7
 const G = {
@@ -59,16 +60,17 @@ const PERIOD = 9;                // cada cuántos segundos aparece "CLICK ON ME"
 const TEXT_AT = 5.5;
 
 export const MENU_ITEMS = [
-  { key: 'proyectos', label: 'PROYECTOS' },
-  { key: 'certificaciones', label: 'CERTIFICACIONES' },
-  { key: 'sobre-mi', label: 'SOBRE MI' },
-  { key: 'contacto', label: 'CONTACTO' },
+  { key: 'projects', label: 'projects' },
+  { key: 'certifications', label: 'certifications' },
+  { key: 'about', label: 'about' },
+  { key: 'contact', label: 'contact' },
 ];
 const ITEM_Y0 = 40, ITEM_STEP = 17;
 const itemRect = (i) => ({ x: 10, y: ITEM_Y0 + i * ITEM_STEP - 4, w: W - 20, h: 15 });
 const BACK_RECT = { x: 10, y: H - 22, w: 62, h: 15 };
 const OPEN_RECT = { x: 88, y: H - 22, w: 62, h: 15 };
-const TAB_NAMES = ['INFO', 'STACK', 'ROL'];
+const TAB_KEYS = ['info', 'stack', 'role'];
+const TAB_LABELS = ['tabInfo', 'tabStack', 'tabRole'];
 const tabRect = (i) => ({ x: 10 + i * 48, y: 32, w: 44, h: 12 });
 const WRAP = 23;
 
@@ -191,7 +193,7 @@ export function createPixelScreen() {
     ctx.fillStyle = FG;
     const k = phase - TEXT_AT;
     let remaining = Math.floor(k * 9), endX = 0, endY = 0;
-    ['CLICK', 'ON ME'].forEach((line, i) => {
+    [tr('click1'), tr('click2')].forEach((line, i) => {
       const y = 32 + i * 28, n = Math.min(remaining, line.length);
       if (n > 0) { endX = drawText(line, Math.round((W - textWidth(line, 4)) / 2), y, 4, n); endY = y; }
       remaining -= n;
@@ -204,7 +206,7 @@ export function createPixelScreen() {
   }
 
   function drawMenu(t) {
-    centered('MENU', 8, 3);
+    centered(tr('menuTitle'), 8, 3);
     ctx.fillRect(10, 30, W - 20, 2);
     MENU_ITEMS.forEach((item, i) => {
       const r = itemRect(i), on = state.hover === i;
@@ -212,7 +214,7 @@ export function createPixelScreen() {
         ctx.fillRect(r.x, r.y, r.w, r.h);
         ctx.fillStyle = BG;
       }
-      drawText((on ? '> ' : '  ') + item.label, r.x + 4, r.y + 4, 1);
+      drawText((on ? '> ' : '  ') + tr(item.label), r.x + 4, r.y + 4, 1);
       ctx.fillStyle = FG;
     });
   }
@@ -233,15 +235,16 @@ export function createPixelScreen() {
 
   function drawPage(t) {
     const item = MENU_ITEMS.find((m) => m.key === state.page);
-    centered(item ? item.label : '', 12, item && item.label.length > 10 ? 1 : 2);
+    const title = item ? tr(item.label) : '';
+    centered(title, 12, title.length > 10 ? 1 : 2);
     ctx.fillRect(10, 30, W - 20, 2);
-    centered('PROXIMAMENTE', 55, 1);
+    centered(tr('comingSoon'), 55, 1);
     if (Math.floor(t * 2) % 2 === 0) ctx.fillRect(W / 2 - 3, 70, 6, 7);
-    button(BACK, '< VOLVER');
+    button(BACK, tr('back'));
   }
 
   function drawProjects(t) {
-    centered('PROYECTOS', 8, 2);
+    centered(tr('projects'), 8, 2);
     ctx.fillRect(10, 30, W - 20, 2);
     PROJECTS.forEach((pr, i) => {
       const r = itemRect(i), on = state.hover === i;
@@ -249,23 +252,24 @@ export function createPixelScreen() {
       drawText((on ? '> ' : '  ') + pr.name, r.x + 4, r.y + 4, 1);
       ctx.fillStyle = FG;
     });
-    drawText('  MAS PRONTO' + (Math.floor(t * 2) % 2 ? '' : '_'), 14, ITEM_Y0 + PROJECTS.length * ITEM_STEP, 1);
-    button(BACK, '< VOLVER');
+    drawText('  ' + tr('moreSoon') + (Math.floor(t * 2) % 2 ? '' : '_'), 14, ITEM_Y0 + PROJECTS.length * ITEM_STEP, 1);
+    button(BACK, tr('back'));
   }
 
   function drawProject() {
     const pr = PROJECTS.find((x) => x.key === state.project);
     if (!pr) return;
     centered(pr.name, 5, 3);
-    TAB_NAMES.forEach((n, i) => {
+    TAB_LABELS.forEach((k, i) => {
+      const n = tr(k);
       const r = tabRect(i), on = state.tab === i, hov = state.hover === 200 + i;
       if (on || hov) { ctx.fillRect(r.x, r.y, r.w, r.h); ctx.fillStyle = BG; }
       drawText(n, r.x + Math.round((r.w - textWidth(n, 1)) / 2), r.y + 3, 1);
       ctx.fillStyle = FG;
     });
-    wrap(pr.tabs[TAB_NAMES[state.tab]]).slice(0, 5).forEach((line, i) => drawText(line, 10, 48 + i * 9, 1));
-    button(BACK, '< VOLVER');
-    button(OPEN, 'ABRIR >');
+    wrap(pick(pr.tabs[TAB_KEYS[state.tab]])).slice(0, 5).forEach((line, i) => drawText(line, 10, 48 + i * 9, 1));
+    button(BACK, tr('back'));
+    button(OPEN, tr('open'));
   }
 
   function draw(t, blink) {
@@ -298,7 +302,7 @@ export function createPixelScreen() {
     if (mode === 'project') {
       if (inside(BACK_RECT, x, y)) return 100;
       if (inside(OPEN_RECT, x, y)) return 101;
-      const tab = TAB_NAMES.findIndex((_, i) => inside(tabRect(i), x, y));
+      const tab = TAB_KEYS.findIndex((_, i) => inside(tabRect(i), x, y));
       return tab >= 0 ? 200 + tab : -1;
     }
     return -1;
