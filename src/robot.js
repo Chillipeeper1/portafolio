@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { createPixelScreen, MENU_ITEMS } from './pixelScreen.js';
 import { FACTS } from './facts.js';
 import { PROJECTS } from './projects.js';
+import { CONTACT } from './contact.js';
 import { getLang, onLang } from './i18n.js';
 
 export function createRobot(container) {
@@ -210,8 +211,10 @@ export function createRobot(container) {
       const { key } = MENU_ITEMS[idx];
       if (key === 'projects') pixelScreen.setMode('projects');
       else pixelScreen.setMode('page', key);
-    } else if (mode === 'page' && idx === 100) {
-      pixelScreen.setMode('menu');
+    } else if (mode === 'page') {
+      if (idx === 100) pixelScreen.setMode('menu');
+      else if (idx === 300) window.location.href = `mailto:${CONTACT.email}`;
+      else if (idx === 301) window.open(CONTACT.linkedin, '_blank', 'noopener');
     } else if (mode === 'projects') {
       if (idx === 100) pixelScreen.setMode('menu');
       else if (idx >= 0) pixelScreen.setMode('project', null, PROJECTS[idx].key);

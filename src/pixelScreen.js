@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { PROJECTS } from './projects.js';
+import { CONTACT } from './contact.js';
 import { t as tr, pick } from './i18n.js';
 
 // Fuente bitmap 5x7
@@ -51,6 +52,7 @@ const G = {
   ':': '00000 00110 00110 00000 00110 00110 00000',
   '+': '00000 00100 00100 11111 00100 00100 00000',
   '/': '00001 00010 00010 00100 01000 01000 10000',
+  '@': '01110 10001 10111 10101 10110 10000 01110',
 };
 const GLYPHS = Object.fromEntries(Object.entries(G).map(([k, v]) => [k, v.split(' ')]));
 
@@ -73,6 +75,10 @@ const TAB_KEYS = ['info', 'stack', 'role'];
 const TAB_LABELS = ['tabInfo', 'tabStack', 'tabRole'];
 const tabRect = (i) => ({ x: 10 + i * 48, y: 32, w: 44, h: 12 });
 const WRAP = 23;
+const CONTACT_ROWS = [
+  { id: 300, label: 'email', text: CONTACT.email },
+  { id: 301, label: 'LINKEDIN', text: CONTACT.linkedinHandle },
+].map((r, i) => ({ ...r, x: 3, y: 36 + i * 29, w: W - 6, h: 26 }));
 
 function wrap(text) {
   const lines = [];
@@ -233,7 +239,26 @@ export function createPixelScreen() {
   }
   const BACK = { ...BACK_RECT, id: 100 }, OPEN = { ...OPEN_RECT, id: 101 };
 
+  function drawContact() {
+    centered(tr('contact'), 12, 2);
+    ctx.fillRect(10, 30, W - 20, 2);
+    CONTACT_ROWS.forEach((r) => {
+      const on = state.hover === r.id;
+      if (on) { ctx.fillRect(r.x, r.y, r.w, r.h); ctx.fillStyle = BG; }
+      else {
+        ctx.fillRect(r.x, r.y, r.w, 1); ctx.fillRect(r.x, r.y + r.h - 1, r.w, 1);
+        ctx.fillRect(r.x, r.y, 1, r.h); ctx.fillRect(r.x + r.w - 1, r.y, 1, r.h);
+      }
+      const label = r.label === 'email' ? tr('emailLabel') : r.label;
+      drawText(label, r.x + 4, r.y + 5, 1);
+      drawText(r.text.toUpperCase(), r.x + 5, r.y + 15, 1);
+      ctx.fillStyle = FG;
+    });
+    button(BACK, tr('back'));
+  }
+
   function drawPage(t) {
+    if (state.page === 'contact') { drawContact(); return; }
     const item = MENU_ITEMS.find((m) => m.key === state.page);
     const title = item ? tr(item.label) : '';
     centered(title, 12, title.length > 10 ? 1 : 2);
@@ -294,7 +319,11 @@ export function createPixelScreen() {
   function hitTest(x, y) {
     const { mode } = state;
     if (mode === 'menu') return MENU_ITEMS.findIndex((_, i) => inside(itemRect(i), x, y));
-    if (mode === 'page') return inside(BACK_RECT, x, y) ? 100 : -1;
+    if (mode === 'page') {
+      if (inside(BACK_RECT, x, y)) return 100;
+      if (state.page === 'contact') return (CONTACT_ROWS.find((r) => inside(r, x, y)) || { id: -1 }).id;
+      return -1;
+    }
     if (mode === 'projects') {
       if (inside(BACK_RECT, x, y)) return 100;
       return PROJECTS.findIndex((_, i) => inside(itemRect(i), x, y));
